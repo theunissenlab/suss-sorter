@@ -12,6 +12,29 @@ Install python dependencies by installing from the requirements.txt file: `pip i
 
 * `imagemagick` for generating animated plots in gif format
 
+# Run
+
+## Spike detection
+
+TBD
+
+## Spike sorting
+
+Prepare your data into arrays of spike waveforms and spike arrival times. The sorting function takes three parameters
+
+`times`: 1-dimensional array of length N\_spikes, each element is the arrival time of a spike in seconds
+
+`waveforms`: 2-dimensional array of shape (N\_spikes, N\_samples), each row is a spike waveform
+
+`sample_rate`: sampling rate used to generate `waveforms` in Hz
+
+Usage example:
+
+```
+>>> from zorter.sort import sort
+>>> sorted_node = sort(times, waveforms, sample_rate=sample_rate)
+```
+
 # Description
 
 Nearly fully automated spike sorting of extracellular signals on single channels for non-stationary units.
