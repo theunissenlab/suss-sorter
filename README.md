@@ -4,7 +4,7 @@ Automated spike sorting for single channel electrophysiology
 
 ![Animated spikes](static/animated-2d.gif)
 
-# Dependencies
+## Dependencies
 
 This project requires Python3.5+. Recommended to use a virtual environment (setup with `virtualenv env -p python3`)
 
@@ -14,13 +14,13 @@ Install python dependencies by installing from the requirements.txt file: `pip i
 
 * `imagemagick` for generating animated plots in gif format
 
-# Run
+## Run
 
-## Spike detection
+### Spike detection
 
 TBD
 
-## Spike sorting
+### Spike sorting
 
 Prepare your data into arrays of spike waveforms and spike arrival times. The sorting function takes three parameters
 
@@ -37,17 +37,17 @@ Usage example:
 >>> sorted_node = sort(times, waveforms, sample_rate=sample_rate)
 ```
 
-# Description
+## Description
 
 Nearly fully automated spike sorting of extracellular signals on single channels for non-stationary units.
 
 The functions are divided into two parts: spike extraction from a raw extracellular signal, and spike sorting from waveform shapes and arrival times.
 
-## Spike detection
+### Spike detection
 
 TBD
 
-## Spike sorting
+### Spike sorting
 
 TBD
 
