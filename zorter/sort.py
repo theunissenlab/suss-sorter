@@ -73,7 +73,7 @@ def sort(
         spacetime_pca = PCA(n_components=spacetime_pcs).fit(master_node.waveforms)
 
     if verbose:
-        print("Sorting {} waveforms over {:.1f} hours".format(
+        print("Sorting {} waveforms ({:.1f} hours of data)".format(
             len(master_node), (np.max(master_node.times) - np.min(master_node.times)) / (60.0 * 60.0)))
     t_start = time.time()
 
