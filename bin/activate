@@ -1,0 +1,16 @@
+#!/bin/bash
+root=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
+root="`dirname \"$root\"`"
+
+export PROJECT_ROOT="${root}"
+export PATH=$PROJECT_ROOT/bin:$PATH
+export PYTHONPATH=$PROJECT_ROOT
+
+if [ $# -eq 0 ]
+  then
+  env=$PROJECT_ROOT/env
+  else
+  env=$PROJECT_ROOT/$1
+fi
+
+. $env/bin/activate
