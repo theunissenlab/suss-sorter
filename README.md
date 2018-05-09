@@ -2,6 +2,8 @@
 
 Automated spike sorting for single channel electrophysiology
 
+![Animated spikes](static/animated-2d.gif)
+
 # Dependencies
 
 This project requires Python3.5+. Recommended to use a virtual environment (setup with `virtualenv env -p python3`)
