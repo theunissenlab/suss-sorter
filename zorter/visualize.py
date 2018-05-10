@@ -200,7 +200,7 @@ def animate_2d(
 
 def time_vs_1d(
         nodes,
-        background_node,
+        background_node=None,
         colors=None,
         alpha=1.0,
         s=20,
@@ -208,6 +208,7 @@ def time_vs_1d(
         background_alpha=0.1,
         background_s=10,
         projections=None,
+        attempt_lda=True,
         fig=None,
         figsize=(10, 2)
     ):
@@ -217,47 +218,69 @@ def time_vs_1d(
     if isinstance(colors, str):
         colors = [colors]
 
-    full_node = DataNode(children=np.concatenate([nodes, [background_node]])).flatten(label=True)
+    main_node = DataNode(children=nodes)
 
-    if projections is None and len(nodes) == 1:
-        lda = (
-            LinearDiscriminantAnalysis(n_components=2)
-            .fit(full_node.waveforms, full_node.labels)
-        )
-        projections = [lambda data: lda.transform(data)]
-    elif projections is None:
-        projections = 1
+    if background_node:
+        full_node = DataNode(children=[
+            main_node.flatten(), background_node.flatten()
+        ])
+    else:
+        full_node = main_node
+
+    if projections is None:
+        if len(full_node.children) > 1:
+            full_node.flatten(1, label=True)
+            lda = (
+                LinearDiscriminantAnalysis(n_components=1)
+                .fit(full_node.waveforms, full_node.labels)
+            )
+            projections = [lambda data: lda.transform(data)]
+        else:
+            projections = 1
+
+    if background_node:
+        full_node = DataNode(children=np.concatenate([
+            main_node.children, [background_node]
+        ]))
 
     if isinstance(projections, int):
-        pca = PCA(n_components=projections).fit(full_node.flatten().waveforms)
+        labeled_data = full_node.flatten(label=True)
+        if attempt_lda and projections < len(full_node.children):
+            projector = LinearDiscriminantAnalysis(
+                    n_components=projections
+            ).fit(labeled_data.waveforms, labeled_data.labels)
+        else:
+            projector = PCA(n_components=projections).fit(labeled_data.waveforms)
+
         projections = [
-            (lambda d: lambda data: pca.transform(data)[:, d])(dim)
+            (lambda _d: lambda _data: projector.transform(_data)[:, _d])(dim)
             for dim in np.arange(projections)
         ]
 
     fig = fig if fig is not None else plt.figure(figsize=figsize)
 
     axes = []
-    for idx, proj in enumerate(projections):
+    for idx, proj_fn in enumerate(projections):
         ax = fig.add_axes(
             [0, idx / len(projections), 1, 1 / len(projections)]
         )
         ax.axis("off")
 
-        ax.scatter(
-            background_node.times,
-            proj(background_node.waveforms),
-            s=background_s,
-            color=background_color,
-            alpha=background_alpha
-        )
+        if background_node:
+            ax.scatter(
+                background_node.times,
+                proj_fn(background_node.waveforms),
+                s=background_s,
+                color=background_color,
+                alpha=background_alpha
+            )
 
         for node_idx, node in enumerate(nodes):
-            scat = ax.scatter(
+            ax.scatter(
                 node.times,
-                proj(node.waveforms),
+                proj_fn(node.waveforms),
                 s=s,
-                color=colors[node_idx] if colors else None,
+                color=None if not colors else colors[node_idx],
                 alpha=alpha
             )
 
