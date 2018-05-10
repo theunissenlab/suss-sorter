@@ -6,11 +6,21 @@ Automated spike sorting for single channel electrophysiology
 
 *Example of results after running automated clustering and manual cluster selection*
 
-## Dependencies
+## Installation and Dependencies
 
-This project requires Python3.5+. Recommended to use a virtual environment (setup with `virtualenv env -p python3`)
+This project requires Python3.5+ (I recommend using a virtualenv.)
 
-Install python dependencies by installing from the requirements.txt file: `pip install -r requirements.txt`
+#### From your python environment
+
+```
+git clone https://github.com/kevinyu/solid-garbanzo.git
+cd solid-garbonzo
+python setup.py build
+python setup.py install
+```
+*This should install the package as well as its depenencies*
+
+#### Other dependencies
 
 * `ffmpeg` for creating HTML5 animated plots in notebooks
 
@@ -43,7 +53,7 @@ sorted_node = sort(times, waveforms, sample_rate=sample_rate)
 
 Nearly fully automated spike sorting of extracellular signals on single channels for non-stationary units.
 
-The functions are divided into two parts: spike extraction from a raw extracellular signal, and spike sorting from waveform shapes and arrival times.
+The functions will be divided into two parts: spike extraction from a raw extracellular signal, and spike sorting from waveform shapes and arrival times.
 
 ### Spike detection
 
