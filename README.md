@@ -4,7 +4,7 @@ Automated spike sorting for single channel electrophysiology
 
 ![Animated spikes](static/animated-2d.gif)
 
-Example of results after running automated clustering and manual cluster selection
+*Example of results after running automated clustering and manual cluster selection*
 
 ## Dependencies
 
@@ -34,9 +34,9 @@ Prepare your data into arrays of spike waveforms and spike arrival times. The so
 
 Usage example:
 
-```
->>> from zorter.sort import sort
->>> sorted_node = sort(times, waveforms, sample_rate=sample_rate)
+```(python)
+from zorter.sort import sort
+sorted_node = sort(times, waveforms, sample_rate=sample_rate)
 ```
 
 ## Description
