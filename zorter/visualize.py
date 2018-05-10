@@ -137,7 +137,7 @@ def animate_2d(
     for lag in range(n_lags):
         scatter_plots.append({})
         for label in unique_labels:
-            scat = ax.scatter([], [], s=s, alpha=alpha[lag])
+            scat = ax.scatter([], [], s=s, alpha=alpha[lag], color=colors.get(label))
             scatter_plots[-1][label] = scat
             colors[label] = scat.get_edgecolor()[0]
 
@@ -212,13 +212,15 @@ def time_vs_1d(
         fig=None,
         figsize=(10, 2)
     ):
-    if isinstance(nodes, DataNode):
+    # Figure out if nodes is a list of nodes or just one DataNode
+    try:
+        main_node = DataNode(children=nodes)
+    except:
         nodes = [nodes]
+        main_node = DataNode(children=nodes)
 
     if isinstance(colors, str):
         colors = [colors]
-
-    main_node = DataNode(children=nodes)
 
     if background_node:
         full_node = DataNode(children=[
