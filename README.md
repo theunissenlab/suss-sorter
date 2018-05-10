@@ -4,6 +4,8 @@ Automated spike sorting for single channel electrophysiology
 
 ![Animated spikes](static/animated-2d.gif)
 
+Example of results after running automated clustering and manual cluster selection
+
 ## Dependencies
 
 This project requires Python3.5+. Recommended to use a virtual environment (setup with `virtualenv env -p python3`)
