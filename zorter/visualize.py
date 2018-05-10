@@ -1,6 +1,11 @@
+import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import animation
+from sklearn.decomposition import PCA
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+
+from .core import DataNode
 
 
 def _get_square_dims(n):
@@ -17,26 +22,71 @@ def _get_square_dims(n):
             return a, b
 
 
+def draw_on(ax_or_fig):
+    if isinstance(ax_or_fig, matplotlib.axes.Axes):
+        _dummy = ax_or_fig.twinx()
+        _dummy.axis("off")
+        _dummy.patch.set_alpha(0.0)
+        _ax = _dummy.twiny()
+        _ax.set_xlim(0, 1)
+        _ax.set_ylim(0, 1)
+    elif isinstance(ax_or_fig, matplotlib.figure.Figure):
+        _ax = ax_or_fig.add_axes(
+            [0, 0, 1, 1],
+            xlim=(0, 1),
+            ylim=(0, 1)
+        )
+
+    _ax.patch.set_alpha(0.0)
+    _ax.axis("off")
+
+    return _ax
+
+
+def write(ax_or_fig, x, y, text, **kwargs):
+    _ax = draw_on(ax_or_fig)
+    _ax.text(x, y, text, **kwargs)
+
+    return _ax
+
+
 def waveforms(
         node,
         fig=None,
         color=None,
         alpha=0.1,
-        width=3,
+        width=2,
         height=2,
+        ylim=(-250, 100),
         median_color="#dd22dd",
         median_linewidth=2,
+        axis=True,
+        quick=False,
     ):
 
     cols, rows = _get_square_dims(len(node.children))
     if fig is None:
-        fig, axes = plt.subplots(rows, cols, figsize=(cols * width, rows * height))
+        fig, axes = plt.subplots(rows, cols, figsize=(cols * width, rows * height), frameon=False)
     else:
-        axes = fig.subplots(rows, cols, figsize=(cols * width, rows * height))
+        axes = fig.subplots(rows, cols, figsize=(cols * width, rows * height), frameon=False)
+
+    for ax in axes.flatten():
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        ax.spines["bottom"].set_visible(False)
+        ax.set_xticks([])
+        ax.set_yticks([])
 
     for child, ax in zip(node.children, axes.flatten()):
-        ax.plot(child.flatten().waveforms.T, color=color, alpha=alpha)
+        if quick:
+            ax.plot(
+                child.flatten().waveforms[::int(len(child.flatten().waveforms) / 100) + 1].T,
+                color=color,
+                alpha=alpha)
+        else:
+            ax.plot(child.flatten().waveforms.T, color=color, alpha=alpha)
         ax.plot(child.waveform, color=median_color, linewidth=median_linewidth)
+        ax.set_ylim(*ylim)
 
     return fig, axes
 
@@ -55,6 +105,7 @@ def animate_2d(
         show_time=True,
         show_waveforms=True,
         waveforms_ylim=(-250, 100),
+        waveforms_alpha=0.05,
         interval: "interval between frames in milliseconds" = 100,
         save_gif: "save animation as a gif" = False,
         save_gif_filename=None,
@@ -117,7 +168,7 @@ def animate_2d(
                         wf_ax.plot(
                                 window.waveforms[window.labels == label].T,
                                 c=colors[label],
-                                alpha=0.01
+                                alpha=waveforms_alpha
                         )
                         wf_ax.set_ylim(*waveforms_ylim)
                         wf_ax.axis("off")
@@ -146,3 +197,70 @@ def animate_2d(
 
     return anim
 
+
+def time_vs_1d(
+        nodes,
+        background_node,
+        colors=None,
+        alpha=1.0,
+        s=20,
+        background_color="Gray",
+        background_alpha=0.1,
+        background_s=10,
+        projections=None,
+        fig=None,
+        figsize=(10, 2)
+    ):
+    if isinstance(nodes, DataNode):
+        nodes = [nodes]
+
+    if isinstance(colors, str):
+        colors = [colors]
+
+    full_node = DataNode(children=np.concatenate([nodes, [background_node]])).flatten(label=True)
+
+    if projections is None and len(nodes) == 1:
+        lda = (
+            LinearDiscriminantAnalysis(n_components=2)
+            .fit(full_node.waveforms, full_node.labels)
+        )
+        projections = [lambda data: lda.transform(data)]
+    elif projections is None:
+        projections = 1
+
+    if isinstance(projections, int):
+        pca = PCA(n_components=projections).fit(full_node.flatten().waveforms)
+        projections = [
+            (lambda d: lambda data: pca.transform(data)[:, d])(dim)
+            for dim in np.arange(projections)
+        ]
+
+    fig = fig if fig is not None else plt.figure(figsize=figsize)
+
+    axes = []
+    for idx, proj in enumerate(projections):
+        ax = fig.add_axes(
+            [0, idx / len(projections), 1, 1 / len(projections)]
+        )
+        ax.axis("off")
+
+        ax.scatter(
+            background_node.times,
+            proj(background_node.waveforms),
+            s=background_s,
+            color=background_color,
+            alpha=background_alpha
+        )
+
+        for node_idx, node in enumerate(nodes):
+            scat = ax.scatter(
+                node.times,
+                proj(node.waveforms),
+                s=s,
+                color=colors[node_idx] if colors else None,
+                alpha=alpha
+            )
+
+        axes.append(ax)
+
+    return fig, axes
