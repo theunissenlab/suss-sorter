@@ -79,7 +79,7 @@ def sort(
 
     _denoised_nodes = []
     for window, _ in master_node.windows(dt=denoising_1_window):
-        kmeans = KMeans(n_clusters=n_denoising_1_clusters)
+        kmeans = KMeans(n_clusters=min(n_denoising_1_clusters, len(window.waveforms)))
         labels = kmeans.fit_predict(
                 sparse_fn(window.waveforms)
                 if denoising_1_sparse
