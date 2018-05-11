@@ -180,5 +180,9 @@ class SubDataset(BaseDataset):
         return self.parent.split(self)
 
     def select(self, *args, **kwargs):
-        raise NotImplementedError("Cannot select by ids from SubDataset. "
-                "Did you want to select from its parent?")
+        # WARNING: selection from a SubDataset selects by element index
+        # rather than by the "id" column of the _data array.
+        # This can potentially be confusing in the future, but is necessary
+        # to allow for cluster()-ing of data in SubDatasets.
+        # See: BaseDataset.select() for implementation
+        return super().select(*args, **kwargs)
