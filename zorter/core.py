@@ -30,6 +30,31 @@ class BaseDataset(object):
         # Ensure this by sorting by this column
         self._data.sort(order="id")
 
+    def __len__(self):
+        return len(self._data)
+
+    def __repr__(self):
+        time_str = "(time={:.3f}s)".format(self.time)
+        class_str = self.__class__.__name__
+
+        if self.is_waveform:
+            contains_str = "{} waveforms".format(len(self._data))
+        else:
+            contains_str = "{} clusters and {} waveforms".format(
+                len(self),
+                len(self.flatten(assign_labels=False))
+            )
+
+        if self.source != self:
+            source_str = "\n  > derived from {}".format(self.source)
+        else:
+            source_str = ""
+
+        return "{} with {} {}{}".format(class_str,
+                contains_str,
+                time_str,
+                source_str)
+
     @property
     def is_waveform(self):
         return "waveform" in self._data.dtype.names
@@ -60,7 +85,25 @@ class BaseDataset(object):
     def ids(self):
         return self._data["id"]
 
+    @property
+    def waveform(self):
+        """Representative waveform is the median waveform"""
+        return np.median(self.waveforms, axis=0)
+
+    @property
+    def time(self):
+        """Representative time is the median time"""
+        return np.median(self.times)
+
+    def __lt__(self, other):
+        """Order objects by their median time
+
+        Implemented so that arrays containing these objects can be sorted
+        """
+        return self.time < other.time
+
     def select(self, selector):
+        """Select by index (not by id!)"""
         selected_subset = self._data[selector]
         return SubDataset(self, ids=selected_subset["id"])
 
@@ -74,7 +117,7 @@ class BaseDataset(object):
     def split(self, *nodes):
         """Divide dataset into datanodes containing given nodes and node excluding
         """
-        combined = self.merge(nodes)
+        combined = self.merge(*nodes)
         return combined, self.complement(combined)
 
     def windows(self, dt):
@@ -91,7 +134,7 @@ class BaseDataset(object):
             node.flatten(None if depth is None else depth - 1)
             for node in self.nodes
         ]
-        bottom_dataset = bottom_nodes[0].parent
+        bottom_dataset = bottom_nodes[0].source
         bottom_ids = [node.ids for node in bottom_nodes]
 
         if assign_labels:
@@ -102,7 +145,10 @@ class BaseDataset(object):
         else:
             labels = None
 
-        return SubDataset(bottom_dataset, np.concatenate(bottom_ids), labels=labels)
+        return SubDataset(
+                bottom_dataset,
+                np.concatenate(bottom_ids),
+                labels=labels)
 
     def cluster(self, cluster_labels):
         return ClusterDataset([
@@ -114,6 +160,7 @@ class BaseDataset(object):
 class SpikeDataset(BaseDataset):
 
     def __init__(self, times, waveforms, sample_rate, labels=None):
+        self.source = self
         self.sample_rate = sample_rate
         if labels is None:
             labels = np.zeros(len(times))
@@ -127,17 +174,19 @@ class SpikeDataset(BaseDataset):
 
 class ClusterDataset(BaseDataset):
 
-    def __init__(self, nodes, labels=None):
-        if not all([hasattr(node, "parent") for node in nodes]):
-            raise ValueError("Cannot generate a ClusterDataset from nodes without "
-                    "parents (must be SubDataset objects)")
+    def __init__(self, subnodes, labels=None):
+        self.source = self
+        sources = [subnode.source for subnode in subnodes]
+        if sources[1:] != sources[:-1]:
+            raise ValueError("All subnodes in ClusterDataset "
+                    "must have the same source Dataset.")
 
         if labels is None:
-            labels = np.zeros(len(nodes))
+            labels = np.zeros(len(subnodes))
 
         super().__init__(
-            times=[node.time for node in nodes],
-            node=(nodes, np.object),
+            times=[subnode.time for subnode in subnodes],
+            node=(subnodes, np.object),
             label=(labels, "int32")
         )
 
@@ -149,25 +198,18 @@ class SubDataset(BaseDataset):
     with a representative waveform shape (the median / mean of its child
     nodes), and representative time (the median time of its child nodes)
     """
-    def __init__(self, parent_dataset, ids, labels=None):
+    def __init__(self, parent_dataset, ids, source_dataset=None, labels=None):
         self.parent = parent_dataset
+        self.source = source_dataset or parent_dataset 
 
         # Copy the selected subset of the parent's data.
         # If you are seeing unexpected behavior from this, perhaps
         # looking here may be useful:
         # http://scipy-cookbook.readthedocs.io/items/ViewsVsCopies.html
-        self._data = self.parent._data[ids]
+        self._data = self.source._data[ids]
         if labels is not None:
-            self._data["label"] = labels 
+            self._data["label"] = labels
         self._data.sort(order="id")
-
-    @property
-    def waveform(self):
-        return np.median(self.waveforms, axis=0)
-
-    @property
-    def time(self):
-        return np.median(self.times)
 
     def merge(self, *nodes):
         return self.parent.merge(*([self] + nodes))
@@ -179,10 +221,11 @@ class SubDataset(BaseDataset):
     def split(self):
         return self.parent.split(self)
 
-    def select(self, *args, **kwargs):
-        # WARNING: selection from a SubDataset selects by element index
-        # rather than by the "id" column of the _data array.
-        # This can potentially be confusing in the future, but is necessary
-        # to allow for cluster()-ing of data in SubDatasets.
-        # See: BaseDataset.select() for implementation
-        return super().select(*args, **kwargs)
+    def select(self, selector):
+        """Select by index (not by id!)"""
+        selected_subset = self._data[selector]
+        return SubDataset(
+                self.parent,
+                ids=selected_subset["id"],
+                source_dataset=self.source
+        )

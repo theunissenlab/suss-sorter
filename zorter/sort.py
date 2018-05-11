@@ -13,7 +13,7 @@ from sklearn.mixture import BayesianGaussianMixture
 from .core import ClusterDataset, SpikeDataset, SubDataset
 
 
-def cluster(node, n_components, mode= "kmeans", transform=None):
+def cluster(dataset, n_components, mode= "kmeans", transform=None):
     """Split node into several by clustering
 
     Create several new nodes from parent by clustering. This is basically
@@ -34,18 +34,18 @@ def cluster(node, n_components, mode= "kmeans", transform=None):
     if mode not in ("kmeans", "gmm"):
         raise ValueError("mode must be either 'kmeans' or 'gmm'")
 
-    n_components = min(n_components, len(node.waveforms))
+    n_components = min(n_components, len(dataset.waveforms))
 
     if mode == "kmeans":
         clusterer = KMeans(n_clusters=n_components)
     elif mode == "gmm":
         clusterer = BayesianGaussianMixture(n_components=n_components)
 
-    data = transform(node.waveforms) if transform is not None else node.waveforms
+    data = transform(dataset.waveforms) if transform is not None else dataset.waveforms
     clusterer.fit(data)
     labels = clusterer.predict(data)
     
-    return [node.select(labels == label) for label in np.unique(labels)]
+    return dataset.cluster(labels).nodes
 
 
 def cluster_step(dataset, dt, n_components, mode="kmeans", transform=None):
@@ -69,14 +69,17 @@ def cluster_step(dataset, dt, n_components, mode="kmeans", transform=None):
         each timestep.
     """
     _denoised_nodes = []
-    for window, _ in dataset.windows(dt=dt):
-        _denoised_nodes += cluster(
+    for _, _, window in dataset.windows(dt=dt):
+        _denoised_nodes.append(
+            cluster(
                 window,
                 n_components=n_components,
                 mode=mode,
-                transform=transform)
+                transform=transform
+            )
+        )
 
-    return ClusterDataset(child_nodes=_denoised_nodes)
+    return ClusterDataset(np.concatenate(_denoised_nodes))
 
 
 def space_time_transform(node, transform=None, zscore=True,
@@ -101,8 +104,8 @@ def space_time_transform(node, transform=None, zscore=True,
     if data.shape[1] >= waveform_features:
         if len(node.nodes) > waveform_features:
             lda  = LDA(n_components=waveform_features).fit(
-                    node.flatten(label=True).waveforms,
-                    node.flatten(label=True).labels
+                    node.flatten(assign_labels=True).waveforms,
+                    node.flatten(assign_labels=True).labels
             )
             data = lda.transform(data)
         else:
@@ -176,7 +179,7 @@ def sort(
 
     if verbose:
         print("Sorting {} waveforms ({:.1f} hours of data)".format(
-            len(spike_dataset),
+            len(spike_dataset.times),
             (np.max(spike_dataset.times) - np.min(spike_dataset.times)) / (60.0 * 60.0)
         ))
     t_start = time.time()

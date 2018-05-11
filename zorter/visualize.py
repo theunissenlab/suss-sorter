@@ -5,7 +5,7 @@ from matplotlib import animation
 from sklearn.decomposition import PCA
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 
-from .core import DataNode
+from .core import ClusterDataset, SpikeDataset, SubDataset
 
 
 def _get_square_dims(n):
@@ -51,7 +51,7 @@ def write(ax_or_fig, x, y, text, **kwargs):
 
 
 def waveforms(
-        node,
+        cluster_dataset,
         fig=None,
         color=None,
         alpha=0.1,
@@ -64,7 +64,7 @@ def waveforms(
         quick=False,
     ):
 
-    cols, rows = _get_square_dims(len(node.children))
+    cols, rows = _get_square_dims(len(cluster_dataset.nodes))
     if fig is None:
         fig, axes = plt.subplots(rows, cols, figsize=(cols * width, rows * height), frameon=False)
     else:
@@ -77,22 +77,22 @@ def waveforms(
         ax.set_xticks([])
         ax.set_yticks([])
 
-    for child, ax in zip(node.children, axes.flatten()):
+    for cluster, ax in zip(cluster_dataset.nodes, axes.flatten()):
         if quick:
             ax.plot(
-                child.flatten().waveforms[::int(len(child.flatten().waveforms) / 100) + 1].T,
+                cluster.flatten().waveforms[::int(len(cluster.flatten().waveforms) / 100) + 1].T,
                 color=color,
                 alpha=alpha)
         else:
-            ax.plot(child.flatten().waveforms.T, color=color, alpha=alpha)
-        ax.plot(child.waveform, color=median_color, linewidth=median_linewidth)
+            ax.plot(cluster.flatten().waveforms.T, color=color, alpha=alpha)
+        ax.plot(cluster.waveform, color=median_color, linewidth=median_linewidth)
         ax.set_ylim(*ylim)
 
     return fig, axes
 
 
 def animate_2d(
-        node,
+        cluster_dataset,
         projection_fn,
         timestep=60.0,
         figsize=(4, 4),
@@ -119,10 +119,10 @@ def animate_2d(
     if n_lags > 1 and len(alpha) != n_lags:
         raise ValueError("Length of alphas must match n_lags")
 
-    node = node.flatten(label=True)
+    labeled_dataset = cluster_dataset.flatten(label=True)
 
-    windows = list(node.windows(dt=timestep))
-    unique_labels = np.unique(node.labels)
+    windows = list(labeled_dataset.windows(dt=timestep))
+    unique_labels = np.unique(labeled_dataset.labels)
 
     fig = plt.figure(figsize=figsize)
     ax = fig.add_axes([0, 0, 1, 1], xlim=xlim, ylim=ylim)
@@ -157,7 +157,7 @@ def animate_2d(
 
         for label in unique_labels:
             for lag, frame_idx in zip(range(n_lags), range(frame, max(frame - n_lags, -1), -1)):
-                window, (t_start, t_stop) = windows[frame_idx]
+                t_start, t_stop, window = windows[frame_idx]
                 if label not in window.labels:
                     scatter_plots[lag][label].set_offsets(np.zeros((0, 2)))
                 else:
@@ -174,7 +174,7 @@ def animate_2d(
                         wf_ax.axis("off")
 
         if show_time:
-            time_label.set_text(time_template.format(windows[frame_idx][1][0] / 60.0))
+            time_label.set_text(time_template.format(windows[frame_idx][0] / 60.0))
 
         return [scatters.values() for scatters in scatter_plots]
 
@@ -199,8 +199,8 @@ def animate_2d(
 
 
 def time_vs_1d(
-        nodes,
-        background_node=None,
+        *clusters,
+        background_dataset=None,
         colors=None,
         alpha=1.0,
         s=20,
@@ -212,42 +212,39 @@ def time_vs_1d(
         fig=None,
         figsize=(10, 2)
     ):
-    # Figure out if nodes is a list of nodes or just one DataNode
-    try:
-        main_node = DataNode(children=nodes)
-    except:
-        nodes = [nodes]
-        main_node = DataNode(children=nodes)
+    clusters = list(clusters)
+    main_node = ClusterDataset(clusters)
 
     if isinstance(colors, str):
         colors = [colors]
 
-    if background_node:
-        full_node = DataNode(children=[
-            main_node.flatten(), background_node.flatten()
+    if background_dataset:
+        discriminator = ClusterDataset([
+            main_node.flatten(),
+            background_dataset.flatten()
         ])
     else:
-        full_node = main_node
+        discriminator = main_node
 
     if projections is None:
-        if len(full_node.children) > 1:
-            full_node.flatten(1, label=True)
+        if len(discriminator.nodes) > 1:
+            discriminator = discriminator.flatten(1, assign_labels=True)
             lda = (
                 LinearDiscriminantAnalysis(n_components=1)
-                .fit(full_node.waveforms, full_node.labels)
+                .fit(discriminator.waveforms, discriminator.labels)
             )
             projections = [lambda data: lda.transform(data)]
         else:
             projections = 1
 
-    if background_node:
-        full_node = DataNode(children=np.concatenate([
-            main_node.children, [background_node]
-        ]))
+    if background_dataset:
+        all_clusters = ClusterDataset(clusters + [background_dataset])
+    else:
+        all_clusters = main_node
 
     if isinstance(projections, int):
-        labeled_data = full_node.flatten(label=True)
-        if attempt_lda and projections < len(full_node.children):
+        labeled_data = all_clusters.flatten(assign_labels=True)
+        if attempt_lda and projections < len(all_clusters.nodes):
             projector = LinearDiscriminantAnalysis(
                     n_components=projections
             ).fit(labeled_data.waveforms, labeled_data.labels)
@@ -268,21 +265,21 @@ def time_vs_1d(
         )
         ax.axis("off")
 
-        if background_node:
+        if background_dataset:
             ax.scatter(
-                background_node.times,
-                proj_fn(background_node.waveforms),
+                background_dataset.times,
+                proj_fn(background_dataset.waveforms),
                 s=background_s,
                 color=background_color,
                 alpha=background_alpha
             )
 
-        for node_idx, node in enumerate(nodes):
+        for cluster_idx, cluster in enumerate(clusters):
             ax.scatter(
-                node.times,
-                proj_fn(node.waveforms),
+                cluster.times,
+                proj_fn(cluster.waveforms),
                 s=s,
-                color=None if not colors else colors[node_idx],
+                color=None if not colors else colors[cluster_idx],
                 alpha=alpha
             )
 
