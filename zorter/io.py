@@ -20,7 +20,7 @@ def read_pickle(filename):
 
 def save_pickle(filename, data):
     with open(filename, "wb") as open_file:
-        pickle.dump(open_file, data)
+        pickle.dump(data, open_file)
 
 
 def read_mat(filename):
