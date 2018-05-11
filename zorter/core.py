@@ -1,118 +1,231 @@
 import numpy as np
 
 
-class DataNode(object):
-    """Abstraction for hierarchical organization of spike data
+class BaseDataset(object):
+    """Spike dataset of times and waveforms"""
+    def __init__(self, times, **columns):
+        """
+        Args
+            times: Array of times
+            **columns: Keywords mapping column names to tuple containing
+                the data to be stored and the dtype. For example,
+                >>> Dataset(times, labels=(np.array([0, 1, 2]), ("int32")))
+        """
+        # transfrom columns from dict of {col_name: (col_data, col_dtype), ...}
+        # to separate arrays of column names, data, and dtypes
+        col_names, _col_data_dtype_pairs = zip(*columns.items())
+        col_datas, col_dtypes = zip(*_col_data_dtype_pairs)
 
-    DataNode can reference children and appears as the
-    median times and waveforms for each of its children.
+        _order = np.argsort(times)
+        self._data = np.array(
+            list(zip(times, _order, *col_datas)),
+            dtype=([
+                ("time", "float64"),
+                ("id", "int32")
+            ] + list(zip(col_names, col_dtypes)))
+        )
 
-    DataNode with children can be flattened with .flatten() which
-    eliminates any number of intermediate layers
-    """
-
-    def __init__(
-            self,
-            times=None,
-            waveforms=None,
-            sample_rate=30000.0,
-            children=None,
-            labels=None
-        ):
-        # TODO: include more annotations such as labels, and idx values referencing master dataset
-        # .... or.... only use indexes into a master node
-        if children is not None and (times is not None or waveforms is not None):
-            raise ValueError("Can only specify either child nodes or times and waveforms")
-
-        if children is None and (times is None or waveforms is None):
-            raise ValueError("Must specify either children or times and waveforms")
-
-        n_data = len(children) if children is not None else len(times)
-
-        if labels is None:
-            labels = np.zeros(n_data)
-
-        if children is not None:
-            sample_rates = [child.sample_rate for child in children]
-            if len(np.unique(sample_rates)) > 1:
-                raise ValueError("Cannot merge nodes with different sample rates: {}".format(set(sample_rates)))
-
-            self.sample_rate = sample_rates[0]
-            times = np.array([child.time for child in children])
-            waveforms = np.array([child.waveform for child in children])
-            self.times, self.waveforms, self.children, self.labels = self._sort(
-                    np.array(times),
-                    np.array(waveforms),
-                    np.array(children),
-                    labels
-            )
-        else:
-            self.children = None
-            self.sample_rate = sample_rate
-            self.times, self.waveforms, self.labels = self._sort(
-                    np.array(times),
-                    np.array(waveforms),
-                    labels)
+        # id should be a column that is always the same as the
+        # normal index by which the array is accessed.
+        # Ensure this by sorting by this column
+        self._data.sort(order="id")
 
     def __len__(self):
-        return len(self.times)
+        return len(self._data)
 
-    def _sort(self, times, *args):
-        _sorter = np.argsort(times)
-        return (times[_sorter],) + tuple([arr[_sorter] for arr in args])
+    def __repr__(self):
+        time_str = "(time={:.3f}s)".format(self.time)
+        class_str = self.__class__.__name__
 
-    def select(self, selector):
-        if self.children is not None:
-            return DataNode(
-                    children=self.children[selector],
-                    labels=self.labels[selector]
-            )
+        if self.is_waveform:
+            contains_str = "{} waveforms".format(len(self._data))
         else:
-            return DataNode(
-                    times=self.times[selector],
-                    waveforms=self.waveforms[selector],
-                    labels=self.labels[selector],
-                    sample_rate=self.sample_rate
+            contains_str = "{} clusters and {} waveforms".format(
+                len(self),
+                len(self.flatten(assign_labels=False))
             )
 
-    def windows(self, dt=0.5 * 60.0):
-        for t_start in np.arange(0.0, np.max(self.times), dt):
-            t_stop = t_start + dt
-            selector = np.where((self.times >= t_start) & (self.times < t_stop))[0]
-            yield (self.select(selector), (t_start, t_stop))
-
-    def flatten(self, depth=None, label=True):
-        """Flatten the tree"""
-        if self.children is None or (depth is not None and depth == 0):
-            return self
-
-        flattened_children = [
-            child.flatten(depth=None if depth is None else depth - 1)
-            for child in self.children
-        ]
-
-        if np.unique([child.children is None for child in flattened_children]).size != 1:
-            raise Exception("Children have different depths... somethings wrong")
-
-        labels = None
-        if label:
-            labels = np.concatenate([
-                idx * np.ones(len(child.times))
-                for idx, child in enumerate(flattened_children)
-            ])
-
-        if any([child.children is not None for child in flattened_children]):
-            children = np.concatenate([child.children for child in flattened_children])
-            return DataNode(children=children, labels=labels)
+        if self.source != self:
+            source_str = "\n  > derived from {}".format(self.source)
         else:
-            times = np.concatenate([child.times for child in flattened_children])
-            waveforms = np.vstack([child.waveforms for child in flattened_children])
-            return DataNode(times, waveforms, sample_rate=self.sample_rate, labels=labels)
-    
+            source_str = ""
+
+        return "{} with {} {}{}".format(class_str,
+                contains_str,
+                time_str,
+                source_str)
+
     @property
-    def time(self):
-        return np.median(self.times)
+    def is_waveform(self):
+        return "waveform" in self._data.dtype.names
+
+    @property
+    def times(self):
+        return self._data["time"]
+
+    @property
+    def waveforms(self):
+        if self.is_waveform:
+            return self._data["waveform"]
+        else:
+            return np.array([node.waveform for node in self.nodes])
+
+    @property
+    def nodes(self):
+        if self.is_waveform:
+            raise ValueError("Dataset containing waveforms has no 'nodes'")
+
+        return self._data["node"]
+
+    @property
+    def labels(self):
+        return self._data["label"]
+
+    @property
+    def ids(self):
+        return self._data["id"]
 
     @property
     def waveform(self):
+        """Representative waveform is the median waveform"""
         return np.median(self.waveforms, axis=0)
+
+    @property
+    def time(self):
+        """Representative time is the median time"""
+        return np.median(self.times)
+
+    def __lt__(self, other):
+        """Order objects by their median time
+
+        Implemented so that arrays containing these objects can be sorted
+        """
+        return self.time < other.time
+
+    def select(self, selector):
+        """Select by index (not by id!)"""
+        selected_subset = self._data[selector]
+        return SubDataset(self, ids=selected_subset["id"])
+
+    def merge(self, *nodes):
+        ids = np.concatenate([node.ids for node in nodes])
+        return self.select(ids)
+
+    def complement(self, node):
+        return self.select(np.delete(self.ids, node.ids))
+
+    def split(self, *nodes):
+        """Divide dataset into datanodes containing given nodes and node excluding
+        """
+        combined = self.merge(*nodes)
+        return combined, self.complement(combined)
+
+    def windows(self, dt):
+        for t_start in np.arange(0.0, np.max(self.times), dt):
+            t_stop = t_start + dt
+            selector = np.where((self.times >= t_start) & (self.times < t_stop))[0]
+            yield t_start, t_stop, self.select(selector)
+
+    def flatten(self, depth=None, assign_labels=True):
+        if self.is_waveform or (depth is not None and depth == 0):
+            return self
+
+        bottom_nodes = [
+            node.flatten(None if depth is None else depth - 1)
+            for node in self.nodes
+        ]
+        bottom_dataset = bottom_nodes[0].source
+        bottom_ids = [node.ids for node in bottom_nodes]
+
+        if assign_labels:
+            labels = np.concatenate([
+                node_idx * np.ones(len(ids))
+                for node_idx, ids in enumerate(bottom_ids)
+            ])
+        else:
+            labels = None
+
+        return SubDataset(
+                bottom_dataset,
+                np.concatenate(bottom_ids),
+                labels=labels)
+
+    def cluster(self, cluster_labels):
+        return ClusterDataset([
+            self.select(cluster_labels == label)
+            for label in np.unique(cluster_labels)
+        ])
+
+
+class SpikeDataset(BaseDataset):
+
+    def __init__(self, times, waveforms, sample_rate, labels=None):
+        self.source = self
+        self.sample_rate = sample_rate
+        if labels is None:
+            labels = np.zeros(len(times))
+
+        super().__init__(
+            times=times,
+            waveform=(waveforms, ("float64", waveforms.shape[1])),
+            label=(labels, "int32")
+        )
+
+
+class ClusterDataset(BaseDataset):
+
+    def __init__(self, subnodes, labels=None):
+        self.source = self
+        sources = [subnode.source for subnode in subnodes]
+        if sources[1:] != sources[:-1]:
+            raise ValueError("All subnodes in ClusterDataset "
+                    "must have the same source Dataset.")
+
+        if labels is None:
+            labels = np.zeros(len(subnodes))
+
+        super().__init__(
+            times=[subnode.time for subnode in subnodes],
+            node=(subnodes, np.object),
+            label=(labels, "int32")
+        )
+
+
+class SubDataset(BaseDataset):
+    """Represents a subset of data in a dataset
+
+    This can act as its own data point in a hierarchical clustering algorithm
+    with a representative waveform shape (the median / mean of its child
+    nodes), and representative time (the median time of its child nodes)
+    """
+    def __init__(self, parent_dataset, ids, source_dataset=None, labels=None):
+        self.parent = parent_dataset
+        self.source = source_dataset or parent_dataset 
+
+        # Copy the selected subset of the parent's data.
+        # If you are seeing unexpected behavior from this, perhaps
+        # looking here may be useful:
+        # http://scipy-cookbook.readthedocs.io/items/ViewsVsCopies.html
+        self._data = self.source._data[ids]
+        if labels is not None:
+            self._data["label"] = labels
+        self._data.sort(order="id")
+
+    def merge(self, *nodes):
+        return self.parent.merge(*([self] + nodes))
+
+    @property
+    def complement(self):
+        return self.parent.complement(self)
+
+    def split(self):
+        return self.parent.split(self)
+
+    def select(self, selector):
+        """Select by index (not by id!)"""
+        selected_subset = self._data[selector]
+        return SubDataset(
+                self.parent,
+                ids=selected_subset["id"],
+                source_dataset=self.source
+        )
