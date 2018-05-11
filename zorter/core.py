@@ -24,8 +24,6 @@ class BaseDataset(object):
                 ("id", "int32")
             ] + list(zip(col_names, col_dtypes)))
         )
-        # TODO: unset and set when writing labels
-        self._data.flags.writable = False
 
         # id should be a column that is always the same as the
         # normal index by which the array is accessed.
@@ -161,7 +159,6 @@ class SubDataset(BaseDataset):
         self._data = self.parent._data[ids]
         if labels is not None:
             self._data["label"] = labels 
-        self._data.flags.writable = False
         self._data.sort(order="id")
 
     @property
