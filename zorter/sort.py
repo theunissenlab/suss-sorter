@@ -10,7 +10,7 @@ from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
 from sklearn.manifold import TSNE
 from sklearn.mixture import BayesianGaussianMixture
 
-from .core import DataNode
+from .core import ClusterDataset, SpikeDataset, SubDataset
 
 
 def cluster(node, n_components, mode= "kmeans", transform=None):
@@ -20,7 +20,7 @@ def cluster(node, n_components, mode= "kmeans", transform=None):
     an abstraction of KMeans and BayesianGaussianMixture model syntax.
 
     Args:
-        node: A core.DataNode object whose waveforms will be clustered
+        node: A instance of a core.BaseDataset whose waveforms will be clustered
         n_components: An integer number representing the (maximum) number
             of clusters to generate
         mode (default: "kmeans"): the clustering algorithm to apply. Can be
@@ -28,7 +28,7 @@ def cluster(node, n_components, mode= "kmeans", transform=None):
         transform (optional): function that maps waveforms to a new feature space
 
     Returns:
-        A list of core.DataNode objects whose data represents the result
+        A list of core.SubDataset objects whose data represents the result
         of clustering
     """
     if mode not in ("kmeans", "gmm"):
@@ -48,15 +48,15 @@ def cluster(node, n_components, mode= "kmeans", transform=None):
     return [node.select(labels == label) for label in np.unique(labels)]
 
 
-def cluster_step(node, dt, n_components, mode="kmeans", transform=None):
+def cluster_step(dataset, dt, n_components, mode="kmeans", transform=None):
     """Implement a first step of the hierarchical clustering algorithm
 
-    From a single core.DataNode, apply clustering over time windows
-    of duration dt, and create a new core.DataNode whose children
+    From a single core.ClusterDataset or core.SpikeDataset, apply clustering over
+    time windows of duration dt, and create a new core.ClusterDataset whose nodes
     represent data clustered in this process.
     
     Args:
-        node: A core.DataNode object whose waveforms will be clustered
+        node: An instance of core.BaseDataset whose waveforms will be clustered
         dt: duration (in seconds) of time window to cluster within
         n_clusters: An integer number representing the (maximum) number
             of clusters to generate
@@ -65,18 +65,18 @@ def cluster_step(node, dt, n_components, mode="kmeans", transform=None):
         transform (optional): function that maps waveforms to a new feature space
 
     Returns:
-        A core.DataNode object with one child for each cluster at
+        A core.ClusterDataset object with one child for each cluster at
         each timestep.
     """
     _denoised_nodes = []
-    for window, _ in node.windows(dt=dt):
+    for window, _ in dataset.windows(dt=dt):
         _denoised_nodes += cluster(
                 window,
                 n_components=n_components,
                 mode=mode,
                 transform=transform)
 
-    return DataNode(children=_denoised_nodes)
+    return ClusterDataset(child_nodes=_denoised_nodes)
 
 
 def space_time_transform(node, transform=None, zscore=True,
@@ -84,7 +84,7 @@ def space_time_transform(node, transform=None, zscore=True,
     """Transform data into highly separable representation using T-SNE
 
     Args:
-        node: A core.DataNode containing the waveforms to be clustered
+        node: An instance of core.BaseDataset containing the waveforms to be clustered
         transform (optional): A function mapping waveforms to a new feature space
             that will be joined with temporal data
         waveform_features (default: 3): An integer number of waveform features
@@ -99,7 +99,7 @@ def space_time_transform(node, transform=None, zscore=True,
     data = transform(node.waveforms) if transform is not None else node.waveforms
 
     if data.shape[1] >= waveform_features:
-        if len(node.children) > waveform_features:
+        if len(node.nodes) > waveform_features:
             lda  = LDA(n_components=waveform_features).fit(
                     node.flatten(label=True).waveforms,
                     node.flatten(label=True).labels
@@ -123,7 +123,7 @@ def space_time_transform(node, transform=None, zscore=True,
 
 
 def prune(node, min_child_size=5):
-    return node.select([len(child) >= min_child_size for child in node.children])
+    return node.select([len(child) >= min_child_size for child in node.nodes])
 
 
 def sort(
@@ -164,25 +164,25 @@ def sort(
             proximity in time, ISI violations, firing properties, etc...
     """
 
-    master_node = DataNode(times=times, waveforms=waveforms, sample_rate=sample_rate)
+    spike_dataset = SpikeDataset(times=times, waveforms=waveforms, sample_rate=sample_rate)
 
     if verbose: print("Initializing...")
 
     # TODO (kevin): dont duplicate the sparse encoding
     if spacetime_sparse:
-        spacetime_pca = PCA(n_components=spacetime_pcs).fit(sparse_fn(master_node.waveforms))
+        spacetime_pca = PCA(n_components=spacetime_pcs).fit(sparse_fn(spike_dataset.waveforms))
     else:
-        spacetime_pca = PCA(n_components=spacetime_pcs).fit(master_node.waveforms)
+        spacetime_pca = PCA(n_components=spacetime_pcs).fit(spike_dataset.waveforms)
 
     if verbose:
         print("Sorting {} waveforms ({:.1f} hours of data)".format(
-            len(master_node),
-            (np.max(master_node.times) - np.min(master_node.times)) / (60.0 * 60.0)
+            len(spike_dataset),
+            (np.max(spike_dataset.times) - np.min(spike_dataset.times)) / (60.0 * 60.0)
         ))
     t_start = time.time()
 
     denoised_node = cluster_step(
-            master_node,
+            spike_dataset,
             dt=denoising_1_window,
             n_components=n_denoising_1_clusters,
             mode="kmeans",
@@ -230,7 +230,7 @@ def sort(
         plt.show()
 
     # TODO (kevin): rejected points (labeled -1) can be assigned to nearest cluster
-    final_node = DataNode(children=[denoised_node.select(labels == label) for label in np.unique(labels)])
+    final_node = denoised_node.cluster(labels)
 
     if verbose:
         print("Final step done in {:.1f}s. "
