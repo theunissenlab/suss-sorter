@@ -214,10 +214,10 @@ def time_vs_1d(
     ):
     # Figure out if nodes is a list of nodes or just one DataNode
     try:
-        main_node = DataNode(children=nodes)
+        [node for node in nodes]
     except:
         nodes = [nodes]
-        main_node = DataNode(children=nodes)
+    main_node = DataNode(children=nodes)
 
     if isinstance(colors, str):
         colors = [colors]
