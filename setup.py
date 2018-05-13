@@ -1,9 +1,9 @@
 from setuptools import setup
 
 setup(
-    name="zorter",
+    name="suss",
     version="0.0",
-    packages=["zorter"],
+    packages=["suss"],
     description=("Automated spike sorting for single channel electrophysiology"),
     author="Kevin Yu",
     author_email="kvnyu@berkeley.edu",
