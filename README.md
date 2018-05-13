@@ -2,7 +2,7 @@
 
 Nearly fully automated spike sorting for single channel electrophysiology. Designed for sorting extracellular signals on single channels with non-stationary units (waveforms changing over time).
 
-![Animated spikes](static/animated-2d.gif) ![More spikes](static/animated-2d-b.gif)
+![Animated spikes](static/animated-2d.gif)
 
 *Example of results after running automated clustering and manual cluster selection*
 
