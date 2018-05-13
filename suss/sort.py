@@ -13,7 +13,7 @@ from sklearn.mixture import BayesianGaussianMixture
 from .core import ClusterDataset, SpikeDataset, SubDataset
 
 
-def cluster(dataset, n_components, mode= "kmeans", transform=None):
+def cluster(dataset, n_components=2, mode= "kmeans", transform=None):
     """Split node into several by clustering
 
     Create several new nodes from parent by clustering. This is basically
@@ -31,24 +31,34 @@ def cluster(dataset, n_components, mode= "kmeans", transform=None):
         A list of core.SubDataset objects whose data represents the result
         of clustering
     """
-    if mode not in ("kmeans", "gmm"):
-        raise ValueError("mode must be either 'kmeans' or 'gmm'")
+    if mode not in ("kmeans", "gmm", "tsne-dbscan"):
+        raise ValueError("mode must be either 'kmeans' or 'gmm' or 'tsne-dbscan'")
 
     n_components = min(n_components, len(dataset.waveforms))
 
-    if mode == "kmeans":
+    data = transform(dataset.waveforms) if transform is not None else dataset.waveforms
+
+    if mode == "tsne-dbscan":
+        clusterer = hdbscan.HDBSCAN(min_cluster_size=2)
+        data = TSNE(n_components=2, perplexity=10.0).fit_transform(data)
+        labels = clusterer.fit_predict(data)
+        # replace -1 labels with unique labels (so they can get pruned)
+        bad_labels = np.where(labels == -1)[0]
+        _fill_in = np.arange(np.max(labels) + 1, np.max(labels) + 1 + len(bad_labels))
+        labels[bad_labels] = _fill_in
+    elif mode == "kmeans":
         clusterer = KMeans(n_clusters=n_components)
+        clusterer.fit(data)
+        labels = clusterer.predict(data)
     elif mode == "gmm":
         clusterer = BayesianGaussianMixture(n_components=n_components)
-
-    data = transform(dataset.waveforms) if transform is not None else dataset.waveforms
-    clusterer.fit(data)
-    labels = clusterer.predict(data)
+        clusterer.fit(data)
+        labels = clusterer.predict(data)
     
     return dataset.cluster(labels).nodes
 
 
-def cluster_step(dataset, dt, n_components, mode="kmeans", transform=None):
+def cluster_step(dataset, dt, n_components=2, mode="kmeans", transform=None):
     """Implement a first step of the hierarchical clustering algorithm
 
     From a single core.ClusterDataset or core.SpikeDataset, apply clustering over
@@ -69,7 +79,10 @@ def cluster_step(dataset, dt, n_components, mode="kmeans", transform=None):
         each timestep.
     """
     _denoised_nodes = []
-    for _, _, window in dataset.windows(dt=dt):
+    _fn_start = time.time()
+    for t_start, _, window in dataset.windows(dt=dt):
+        print("Clustering t={:.2f}.min. {:.1f}s elapsed.".format(
+            t_start / 60.0, time.time() - _fn_start), end="\r")
         _denoised_nodes.append(
             cluster(
                 window,
@@ -125,8 +138,43 @@ def space_time_transform(node, transform=None, zscore=True,
     return tsne.fit_transform(space_time)
 
 
-def prune(node, min_child_size=5):
-    return node.select([len(child) >= min_child_size for child in node.nodes])
+def prune(dataset, min_cluster_size=5):
+    return dataset.select([len(cluster) >= min_cluster_size for cluster in dataset.nodes])
+
+
+def default_sort(times, waveforms, sample_rate, sparse_fn):
+    """Sort function with 'default' parameters"""
+    spike_dataset = SpikeDataset(times=times, waveforms=waveforms, sample_rate=sample_rate)
+
+    denoised_clusters = cluster_step(spike_dataset,
+            dt=0.5 * 60.0,
+            n_components=25,
+            mode="kmeans",
+            transform=sparse_fn)
+    denoised_clusters = prune(denoised_clusters, 10)
+
+    clustered_clusters = cluster_step(spike_dataset,
+            dt=5 * 60.0,
+            mode="tsne-dbscan",
+            transform=lambda data: PCA(n_components=10).fit_transform(data)
+    )
+    clustered_clusters = prune(clustered_clusters, 2)
+
+    space_time = space_time_transform(
+        clustered_clusters,
+        transform=None,
+        zscore=True,
+        waveform_features=3,
+        time_features=True,
+        perplexity=30.0,
+    )
+
+    hdb = hdbscan.HDBSCAN(min_cluster_size=5)
+    labels = hdb.fit_predict(space_time)
+
+    result = clustered_clusters.cluster(labels).flatten(assign_labels=True)
+
+    return result
 
 
 def sort(
@@ -191,7 +239,7 @@ def sort(
             mode="kmeans",
             transform=sparse_fn)
 
-    denoised_node = prune(denoised_node, min_cluster_size=denoising_1_min_size)
+    denoised_node = prune(denoised_node, min_cluster_size=denoising_1_min_cluster_size)
 
     if verbose:
         print("First denoising step done in {:.1f}s. "

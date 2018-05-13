@@ -119,7 +119,7 @@ def animate_2d(
     if n_lags > 1 and len(alpha) != n_lags:
         raise ValueError("Length of alphas must match n_lags")
 
-    labeled_dataset = cluster_dataset.flatten(label=True)
+    labeled_dataset = cluster_dataset.flatten(assign_labels=True)
 
     windows = list(labeled_dataset.windows(dt=timestep))
     unique_labels = np.unique(labeled_dataset.labels)
@@ -154,6 +154,7 @@ def animate_2d(
 
     def draw(frame):
         wf_ax.clear()
+        wf_ax.axis("off")
 
         for label in unique_labels:
             for lag, frame_idx in zip(range(n_lags), range(frame, max(frame - n_lags, -1), -1)):
@@ -174,7 +175,8 @@ def animate_2d(
                         wf_ax.axis("off")
 
         if show_time:
-            time_label.set_text(time_template.format(windows[frame_idx][0] / 60.0))
+            time_label.set_text(time_template.format(windows[frame][0] / 60.0))
+        print("Drawing frame {}/{}".format(frame, len(windows)), end="\r")
 
         return [scatters.values() for scatters in scatter_plots]
 

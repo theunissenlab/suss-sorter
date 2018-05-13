@@ -28,21 +28,27 @@ class BaseDataset(object):
         # id should be a column that is always the same as the
         # normal index by which the array is accessed.
         # Ensure this by sorting by this column
+        if not all(self.ids[:-1] <= self.ids[1:]):
+            self._data.sort(order="id")
         self._data.sort(order="id")
 
     def __len__(self):
         return len(self._data)
 
     def __repr__(self):
-        time_str = "(time={:.3f}s)".format(self.time)
         class_str = self.__class__.__name__
+
+        if not len(self._data):
+            return "Empty {}".format(class_str)
+
+        time_str = "(time={:.3f}s)".format(self.time)
 
         if self.is_waveform:
             contains_str = "{} waveforms".format(len(self._data))
         else:
             contains_str = "{} clusters and {} waveforms".format(
                 len(self),
-                len(self.flatten(assign_labels=False))
+                self.waveform_count
             )
 
         if self.source != self:
@@ -58,6 +64,13 @@ class BaseDataset(object):
     @property
     def is_waveform(self):
         return "waveform" in self._data.dtype.names
+
+    @property
+    def waveform_count(self):
+        if self.is_waveform:
+            return len(self.ids)
+        else:
+            return np.sum([node.waveform_count for node in self.nodes])
 
     @property
     def times(self):
@@ -105,7 +118,9 @@ class BaseDataset(object):
     def select(self, selector):
         """Select by index (not by id!)"""
         selected_subset = self._data[selector]
-        return SubDataset(self, ids=selected_subset["id"])
+        return SubDataset(self,
+                ids=selected_subset["id"],
+                labels=selected_subset["label"])
 
     def merge(self, *nodes):
         ids = np.concatenate([node.ids for node in nodes])
@@ -153,7 +168,7 @@ class BaseDataset(object):
     def cluster(self, cluster_labels):
         return ClusterDataset([
             self.select(cluster_labels == label)
-            for label in np.unique(cluster_labels)
+            for label in sorted(np.unique(cluster_labels))
         ])
 
 
@@ -178,8 +193,8 @@ class ClusterDataset(BaseDataset):
         self.source = self
         sources = [subnode.source for subnode in subnodes]
         if sources[1:] != sources[:-1]:
-            raise ValueError("All subnodes in ClusterDataset "
-                    "must have the same source Dataset.")
+            print("Warning... ClusterDataset being created with different "
+                    "source datasets. {}".format(subnodes))
 
         if labels is None:
             labels = np.zeros(len(subnodes))
@@ -209,7 +224,8 @@ class SubDataset(BaseDataset):
         self._data = self.source._data[ids]
         if labels is not None:
             self._data["label"] = labels
-        self._data.sort(order="id")
+        if not all(self.ids[:-1] <= self.ids[1:]):
+            self._data.sort(order="id")
 
     def merge(self, *nodes):
         return self.parent.merge(*([self] + nodes))
@@ -227,5 +243,6 @@ class SubDataset(BaseDataset):
         return SubDataset(
                 self.parent,
                 ids=selected_subset["id"],
+                labels=selected_subset["label"],
                 source_dataset=self.source
         )

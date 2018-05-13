@@ -22,7 +22,7 @@ Usage example:
 
 ```python
 import matplotlib.pyplot
-from zorter.sort import sort
+from suss.sort import sort
 sorted_node = sort(times, waveforms, sample_rate=sample_rate)
 for putative_cluster in sorted_node.children:
   plt.plot(putative_cluster.waveforms.T)
