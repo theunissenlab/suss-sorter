@@ -9,9 +9,13 @@ stimulus arrival times and filtering stimuli by their properties
 import numpy as np
 
 
-def align(node, stimulus_times, t_before, t_after):
-    aligned_nodes = []
+def align(cluster, stimulus_times, t_start, t_stop):
+    aligned_spikes = []
     for stimulus_time in stimulus_times:
-        aligned_nodes.append(node.align(stimulus_time, before=t_before, after=t_after))
+        _t_start = stimulus_time + t_start
+        _t_stop = stimulus_time + t_stop
+        window = cluster.select((cluster.times >= _t_start) & (cluster.times < _t_stop))
 
-    return aligned_nodes
+        aligned_spikes.append(window.times - stimulus_time)
+
+    return aligned_spikes
