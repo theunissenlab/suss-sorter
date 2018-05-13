@@ -58,7 +58,7 @@ def cluster(dataset, n_components=2, mode= "kmeans", transform=None):
     return dataset.cluster(labels).nodes
 
 
-def cluster_step(dataset, dt, n_components, mode="kmeans", transform=None):
+def cluster_step(dataset, dt, n_components=2, mode="kmeans", transform=None):
     """Implement a first step of the hierarchical clustering algorithm
 
     From a single core.ClusterDataset or core.SpikeDataset, apply clustering over
