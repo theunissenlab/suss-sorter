@@ -13,7 +13,7 @@ from sklearn.mixture import BayesianGaussianMixture
 from .core import ClusterDataset, SpikeDataset, SubDataset
 
 
-def cluster(dataset, n_components, mode= "kmeans", transform=None):
+def cluster(dataset, n_components=2, mode= "kmeans", transform=None):
     """Split node into several by clustering
 
     Create several new nodes from parent by clustering. This is basically
@@ -40,7 +40,7 @@ def cluster(dataset, n_components, mode= "kmeans", transform=None):
 
     if mode == "tsne-dbscan":
         clusterer = hdbscan.HDBSCAN(min_cluster_size=2)
-        data = TSNE(n_components=2).fit_transform(data)
+        data = TSNE(n_components=2, perplexity=10.0).fit_transform(data)
         labels = clusterer.fit_predict(data)
         # replace -1 labels with unique labels (so they can get pruned)
         bad_labels = np.where(labels == -1)[0]
@@ -140,6 +140,41 @@ def space_time_transform(node, transform=None, zscore=True,
 
 def prune(dataset, min_cluster_size=5):
     return dataset.select([len(cluster) >= min_cluster_size for cluster in dataset.nodes])
+
+
+def default_sort(times, waveforms, sample_rate, sparse_fn):
+    """Sort function with 'default' parameters"""
+    spike_dataset = SpikeDataset(times=times, waveforms=waveforms, sample_rate=sample_rate)
+
+    denoised_clusters = cluster_step(spike_dataset,
+            dt=0.5 * 60.0,
+            n_components=25,
+            mode="kmeans",
+            transform=sparse_fn)
+    denoised_clusters = prune(denoised_clusters, 10)
+
+    clustered_clusters = cluster_step(spike_dataset,
+            dt=5 * 60.0,
+            mode="tsne-dbscan",
+            transform=lambda data: PCA(n_components=10).fit_transform(data)
+    )
+    clustered_clusters = prune(clustered_clusters, 2)
+
+    space_time = space_time_transform(
+        clustered_clusters,
+        transform=None,
+        zscore=True,
+        waveform_features=3,
+        time_features=True,
+        perplexity=30.0,
+    )
+
+    hdb = hdbscan.HDBSCAN(min_cluster_size=5)
+    labels = hdb.fit_predict(space_time)
+
+    result = clustered_clusters.cluster(labels).flatten(assign_labels=True)
+
+    return result
 
 
 def sort(
