@@ -153,7 +153,7 @@ def default_sort(times, waveforms, sample_rate, sparse_fn):
             transform=sparse_fn)
     denoised_clusters = prune(denoised_clusters, 10)
 
-    clustered_clusters = cluster_step(spike_dataset,
+    clustered_clusters = cluster_step(denoised_clusters,
             dt=5 * 60.0,
             mode="tsne-dbscan",
             transform=lambda data: PCA(n_components=10).fit_transform(data)
@@ -164,7 +164,7 @@ def default_sort(times, waveforms, sample_rate, sparse_fn):
         clustered_clusters,
         transform=None,
         zscore=True,
-        waveform_features=3,
+        waveform_features=5,
         time_features=True,
         perplexity=30.0,
     )
