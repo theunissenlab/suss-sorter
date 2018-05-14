@@ -22,9 +22,9 @@ setup(
         "numpy==1.14.3",
         "scipy==1.1.0",
         "sklearn==0.0",
+        "torch==0.4.0",
     ],
     extras_require={
         "notebooks": ["jupyter==1.0.0"],
-        "spike_models": ["torch==0.4.0"],
     }
 )

@@ -7,8 +7,12 @@ import scipy.stats
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
-from sklearn.manifold import TSNE
 from sklearn.mixture import BayesianGaussianMixture
+
+try:
+    from MulticoreTSNE import MulticoreTSNE as TSNE
+except ImportError:
+    from sklearn.manifold import TSNE
 
 from .core import ClusterDataset, SpikeDataset, SubDataset
 
