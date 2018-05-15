@@ -26,5 +26,6 @@ setup(
     ],
     extras_require={
         "notebooks": ["jupyter==1.0.0"],
+        "gui": ["PyQt5==5.10.1"],
     }
 )

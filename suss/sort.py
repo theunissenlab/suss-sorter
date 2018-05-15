@@ -176,9 +176,9 @@ def default_sort(times, waveforms, sample_rate, sparse_fn):
     hdb = hdbscan.HDBSCAN(min_cluster_size=5)
     labels = hdb.fit_predict(space_time)
 
-    result = clustered_clusters.cluster(labels).flatten(assign_labels=True)
+    result = clustered_clusters.cluster(labels) #.flatten(assign_labels=True)
 
-    return result
+    return space_time, labels, result
 
 
 def sort(
