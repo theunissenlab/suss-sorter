@@ -153,10 +153,16 @@ class BaseDataset(object):
         bottom_ids = [node.ids for node in bottom_nodes]
 
         if assign_labels:
-            labels = np.concatenate([
-                node_idx * np.ones(len(ids))
-                for node_idx, ids in enumerate(bottom_ids)
-            ])
+            if len(np.unique(self.labels)) == len(bottom_nodes):
+                labels = np.concatenate([
+                    current_label * np.ones(len(ids))
+                    for current_label, ids in zip(self.labels, bottom_ids)
+                ])
+            else:
+                labels = np.concatenate([
+                    node_idx * np.ones(len(ids))
+                    for node_idx, ids in enumerate(bottom_ids)
+                ])
         else:
             labels = None
 
@@ -166,10 +172,14 @@ class BaseDataset(object):
                 labels=labels)
 
     def cluster(self, cluster_labels):
-        return ClusterDataset([
-            self.select(cluster_labels == label)
-            for label in sorted(np.unique(cluster_labels))
-        ])
+        unique_labels = sorted(np.unique(cluster_labels))
+        return ClusterDataset(
+            [
+                self.select(cluster_labels == label)
+                for label in unique_labels
+            ],
+            labels=unique_labels
+        )
 
 
 class SpikeDataset(BaseDataset):
