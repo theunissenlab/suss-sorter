@@ -1,0 +1,490 @@
+from collections import defaultdict
+from functools import partial
+
+import numpy as np
+from PyQt5 import QtWidgets as widgets
+from matplotlib import cm
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.figure import Figure
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
+from sklearn.decomposition import PCA
+
+
+def get_color_dict(labels):
+    unique_labels = sorted(np.unique(labels))
+    n_labels = len(unique_labels)
+    return dict((label, cm.gist_ncar(idx / n_labels))
+            for idx, label in enumerate(unique_labels))
+
+
+def selector_area(dataset, width, colors, cb):
+    button_frame = widgets.QGroupBox()
+    button_layout = widgets.QGridLayout()
+    for label, cluster in zip(dataset.labels, dataset.nodes):
+        button = widgets.QPushButton("{}".format(label))
+        button.setCheckable(True)
+        button.setDefault(False)
+        button.setAutoDefault(False)
+        button.clicked[bool].connect(partial(cb, label=label))
+        color = "rgba({}, {}, {})".format(*(255 * np.array(colors.get(label))[:3]))
+        button.setStyleSheet("""
+            QPushButton:checked
+            {{
+                border: 4px solid #444444;
+                border-style: inset;
+            }}
+            QPushButton {{
+                background-color: {};
+            }}
+        """.format(color))
+        button_layout.addWidget(button)
+    button_frame.setLayout(button_layout)
+    scroll_area = widgets.QScrollArea()
+    scroll_area.setWidget(button_frame)
+    scroll_area.setWidgetResizable(True)
+    scroll_area.setFixedWidth(width)
+
+    return scroll_area
+
+
+def clear_axes(*axes):
+    for ax in axes:
+        ax.set_xticklabels([])
+        ax.set_yticklabels([])
+    return axes
+
+
+class ProjectionsPane(widgets.QFrame):
+    def __init__(self, dataset, colors,
+            size=(300, 350),
+            facecolor="#222222",
+            frac=10,
+            min_isi=0.001,
+            parent=None):
+        super().__init__(parent)
+        self.dataset = dataset
+        self.colors = colors
+        self.size = size
+        self.facecolor = facecolor
+        self.frac = frac
+        self.min_isi = min_isi
+        self.active_clusters = set()
+
+        self.setup_layout()
+        self.setup_data()
+
+    def setup_layout(self):
+        fig = Figure()
+        self.canvas = FigureCanvas(fig)
+        self.canvas.setFixedSize(*self.size)
+        self.ax_1d = fig.add_axes([0, 0, 1, 0.2], facecolor=self.facecolor)
+        self.ax_2d = fig.add_axes([0, 0.2, 1, 0.8], facecolor=self.facecolor)
+        clear_axes(self.ax_1d, self.ax_2d)
+        self.ax_2d.grid(color="#DDDDDD", linestyle="-", linewidth=0.2)
+
+        layout = widgets.QVBoxLayout()
+        layout.addWidget(self.canvas)
+        self.setLayout(layout)
+
+    def setup_data(self):
+        pass
+
+    def toggle(self, selected, label=None):
+        if selected:
+            self.active_clusters.add(label)
+        else:
+            self.active_clusters.remove(label)
+        self.update_selection(self.active_clusters)
+
+    def update_selection(self, active_clusters):
+        self.active_clusters = active_clusters
+        self.ax_1d.clear()
+        self.ax_2d.clear()
+        clear_axes(self.ax_1d, self.ax_2d)
+        self.ax_2d.grid(color="#CCCCCC", linestyle="-", linewidth=0.2)
+
+        if len(self.active_clusters) == 0:
+            self.canvas.draw()
+            return
+
+        selected_clusters = self.dataset.select(
+            np.isin(self.dataset.labels, list(self.active_clusters))
+        )
+        selected_flattened = selected_clusters.flatten(assign_labels=True)
+
+        if len(self.active_clusters) == 1:
+            lda2 = PCA(n_components=2).fit(selected_flattened.waveforms, selected_flattened.labels)
+            lda1 = PCA(n_components=1).fit(selected_flattened.waveforms, selected_flattened.labels)
+        elif len(self.active_clusters) == 2:
+            lda2 = PCA(n_components=2).fit(selected_flattened.waveforms, selected_flattened.labels)
+            lda1 = LDA(n_components=1).fit(selected_flattened.waveforms, selected_flattened.labels)
+        else:
+            lda2 = LDA(n_components=2).fit(selected_flattened.waveforms, selected_flattened.labels)
+            lda1 = LDA(n_components=1).fit(selected_flattened.waveforms, selected_flattened.labels)
+
+        # Transform data
+        lda2_data = lda2.transform(selected_flattened.waveforms)
+        lda1_data = lda1.transform(selected_flattened.waveforms)
+
+        # Plot 1d projection as histogram
+        labels = sorted(self.active_clusters)
+        self.ax_1d.hist(
+            [
+                lda1_data[selected_flattened.labels == label].flatten()
+                for label in labels
+            ],
+            bins=200,
+            color=list(map(self.colors.get, labels)),
+            alpha=0.5,
+            stacked=True)
+
+        # Plot 2d projections
+        for label in self.active_clusters:
+            self.ax_2d.scatter(
+                *lda2_data[selected_flattened.labels == label][::self.frac].T,
+                s=1,
+                color=self.colors[label],
+                alpha=1.0)
+
+        # Draw violations on 2d scatter
+        bad_idx = np.diff(selected_flattened.times) <= self.min_isi
+        violations_within_cluster = bad_idx & (selected_flattened.labels[:-1] == selected_flattened.labels[1:])
+        violations_across_cluster = bad_idx & (selected_flattened.labels[:-1] != selected_flattened.labels[1:])
+
+        within_pairs = zip(
+            lda2_data[:-1][::self.frac][violations_within_cluster[::self.frac]],
+            lda2_data[1:][::self.frac][violations_within_cluster[::self.frac]]
+        )
+        across_pairs = zip(
+            lda2_data[:-1][::self.frac][violations_across_cluster[::self.frac]],
+            lda2_data[1:][::self.frac][violations_across_cluster[::self.frac]]
+        )
+
+        for spike1, spike2 in within_pairs:
+            self.ax_2d.plot(*zip(spike1, spike2), linewidth=0.8, color="#FFFFFF",
+                    linestyle=":", alpha=1.0)
+
+        for spike1, spike2 in across_pairs:
+            self.ax_2d.plot(*zip(spike1, spike2), linewidth=1, color="#FFFFFF", alpha=1.0)
+            self.ax_2d.plot(*zip(spike1, spike2), linewidth=0.5, color="Red",
+                    linestyle="--", alpha=1.0)
+
+        self.canvas.draw()
+
+
+class OverviewScatterPane(widgets.QFrame):
+
+    def __init__(self, dataset, colors,
+            size=(300, 300),
+            inactive_color="#DDDDDD",
+            facecolor="#FFFFFF",
+            parent=None):
+        super().__init__(parent)
+        self.dataset = dataset
+        self.colors = colors
+        self.size = size
+
+        self.inactive_color = inactive_color
+        self.facecolor = facecolor
+
+        flattened = dataset.flatten(1, assign_labels=True)
+        self.data = LDA(n_components=2).fit_transform(flattened.waveforms, flattened.labels)
+        self.labels = flattened.labels
+
+        self.setup_layout()
+        self.setup_data()
+
+    def setup_layout(self):
+        fig = Figure()
+        self.canvas = FigureCanvas(fig)
+        self.canvas.setFixedSize(*self.size)
+        self.ax = fig.add_axes([0, 0, 1, 1], facecolor=self.facecolor)
+        clear_axes(self.ax)
+
+        layout = widgets.QVBoxLayout()
+        layout.addWidget(self.canvas)
+        self.setLayout(layout)
+
+    def setup_data(self):
+        for label in self.dataset.labels:
+            self.ax.scatter(
+                *self.data[self.labels == label].T,
+                color=self.colors[label],
+                alpha=0.1,
+                s=2,
+            )
+        self.scatters = {}
+        for label in self.dataset.labels:
+            self.scatters[label] = self.ax.scatter(
+                *self.data[self.labels == label].T,
+                color=self.colors[label],
+                alpha=1.0,
+                s=1,
+            )
+            self.scatters[label].set_visible(False)
+        self.canvas.draw()
+
+    def toggle(self, selected, label=None):
+        self.scatters[label].set_visible(selected)
+        self.canvas.draw()
+
+
+class LegendPane(widgets.QFrame):
+    def __init__(self, selected_clusters, colors, parent=None):
+        super().__init__(parent)
+
+
+class ISIPane(widgets.QFrame):
+    def __init__(self, dataset, colors, size=(250, 250), facecolor=None, frac=50, parent=None):
+        super().__init__(parent)
+        self.dataset = dataset
+        self.colors = colors
+        self.size = size
+        self.facecolor = facecolor
+        self.frac = frac
+        self.active_clusters = set()
+
+        self.setup_layout()
+        self.setup_data()
+
+    def setup_layout(self):
+        fig = Figure()
+        self.canvas = FigureCanvas(fig)
+        self.canvas.setFixedSize(*self.size)
+        self.ax = fig.add_axes([0, 0, 1, 1], facecolor=self.facecolor)
+        self.text_ax = fig.add_axes([0, 0, 1, 1], xlim=(0, 1), ylim=(0, 1))
+        self.text_ax.patch.set_alpha(0.0)
+        clear_axes(self.text_ax)
+
+        layout = widgets.QVBoxLayout()
+        layout.addWidget(self.canvas)
+        self.setLayout(layout)
+
+    def setup_data(self):
+        pass
+
+    def toggle(self, selected, label=None):
+        if selected:
+            self.active_clusters.add(label)
+        else:
+            self.active_clusters.remove(label)
+        self.update_selection(self.active_clusters)
+
+    def update_selection(self, active_clusters):
+        self.active_clusters = active_clusters
+        self.ax.clear()
+        self.text_ax.clear()
+        self.text_ax.patch.set_alpha(0.0)
+        clear_axes(self.text_ax)
+
+        if len(self.active_clusters) == 0:
+            self.canvas.draw()
+            return
+
+        clusters = self.dataset.select(
+            np.isin(self.dataset.labels, list(self.active_clusters))
+        ).flatten()
+
+        isi_arr = np.diff(clusters.times) 
+
+        self.ax.hist(
+            isi_arr,
+            bins=50,
+            range=(0, 0.05),
+            color="#BBBBBB",
+            alpha=0.8
+        )
+        self.ax.vlines(0.001, *self.ax.get_ylim(), color="Red", linestyle="--")
+        self.text_ax.text(0.5, 0.7,
+                "{:.1f}%\nISI violations".format(
+                    100.0 * np.sum(isi_arr <= 0.001) / len(isi_arr)
+                ),
+                fontsize=8,
+                color="#BBBBBB"
+        )
+
+        self.canvas.draw()
+
+
+class WaveformsPane(widgets.QFrame):
+    def __init__(self, dataset, colors, size=(250, 250), facecolor=None, frac=50, parent=None):
+        super().__init__(parent)
+        self.dataset = dataset
+        self.colors = colors
+        self.size = size
+        self.facecolor = facecolor
+        self.frac = frac
+        self.active_clusters = set()
+
+        self.setup_layout()
+        self.setup_data()
+
+    def setup_layout(self):
+        fig = Figure()
+        self.canvas = FigureCanvas(fig)
+        self.canvas.setFixedSize(*self.size)
+        self.ax = fig.add_axes([0, 0, 1, 1], facecolor=self.facecolor, ylim=(-250, 120))
+        clear_axes(self.ax)
+        self.ax.grid(color="#CCCCCC", linestyle="-", linewidth=0.2)
+
+        layout = widgets.QVBoxLayout()
+        layout.addWidget(self.canvas)
+        self.setLayout(layout)
+
+    def setup_data(self):
+        pass
+
+    def toggle(self, selected, label=None):
+        if selected:
+            self.active_clusters.add(label)
+        else:
+            self.active_clusters.remove(label)
+        self.update_selection(self.active_clusters)
+
+    def update_selection(self, active_clusters):
+        self.active_clusters = active_clusters
+        self.ax.clear()
+        clear_axes(self.ax)
+        self.ax.grid(color="#CCCCCC", linestyle="-", linewidth=0.2)
+
+        if len(self.active_clusters) == 0:
+            self.canvas.draw()
+            return
+
+        selected_clusters = self.dataset.select(
+            np.isin(self.dataset.labels, list(self.active_clusters))
+        )
+        flattened = selected_clusters.flatten(assign_labels=True)
+
+
+        for label in self.active_clusters:
+            self.ax.plot(
+                flattened.waveforms[flattened.labels == label][::self.frac].T,
+                linewidth=0.1,
+                alpha=0.7,
+                color=self.colors[label]
+            )
+
+        for label in self.active_clusters:
+            self.ax.plot(
+                np.mean(flattened.waveforms[flattened.labels == label], axis=0),
+                linewidth=2.0,
+                alpha=0.8,
+                color="White"
+            )
+            self.ax.plot(
+                np.mean(flattened.waveforms[flattened.labels == label], axis=0),
+                linewidth=1.2,
+                alpha=1.0,
+                color=self.colors[label]
+            )
+
+        self.ax.plot(
+                np.mean(flattened.waveforms, axis=0),
+                linewidth=1,
+                alpha=0.8,
+                color="Black",
+                linestyle="--"
+        )
+        self.canvas.draw()
+
+
+class TimeseriesPane(widgets.QFrame):
+    def __init__(self, dataset, colors,
+            n_components=2,
+            size=(700, 100),
+            inactive_color="#DDDDDD",
+            facecolor="#FFFFFF",
+            frac=10,
+            parent=None):
+        super().__init__(parent)
+        self.dataset = dataset
+        self.colors = colors
+        self.size = size
+        self.frac = frac  # how many items to skip when plotting
+        self.inactive_color = inactive_color
+        self.facecolor = facecolor
+        self.n_components=n_components
+
+        self.flattened = dataset.flatten(assign_labels=True)
+        self.data = LDA(n_components=n_components).fit_transform(
+            self.flattened.waveforms, self.flattened.labels)
+
+        self.setup_layout()
+        self.setup_data()
+
+    def setup_layout(self):
+        fig = Figure()
+        self.canvas = FigureCanvas(fig)
+        self.canvas.setFixedSize(*self.size)
+
+        self.axes = []
+        for component in range(self.n_components):
+            self.axes.append(
+                fig.add_axes(
+                    [0, component / self.n_components, 1, 1 / self.n_components],
+                    facecolor=self.facecolor
+                )
+            )
+        clear_axes(*self.axes)
+
+        layout = widgets.QVBoxLayout()
+        layout.addWidget(self.canvas)
+        self.setLayout(layout)
+
+    def setup_data(self):
+        for component, ax in enumerate(self.axes):
+            ax.scatter(
+                self.flattened.times[::self.frac],
+                self.data[::self.frac, component],
+                s=2,
+                alpha=0.1,
+                color=self.inactive_color
+            )
+
+        self.scatters = defaultdict(list)
+        for label in self.dataset.labels:
+            print(label, self.colors[label])
+            for component, ax in enumerate(self.axes):
+                self.scatters[label].append(ax.scatter(
+                    self.flattened.times[self.flattened.labels == label][::self.frac],
+                    self.data[self.flattened.labels == label][::self.frac, component],
+                    s=1,
+                    alpha=0.2,
+                    color=self.colors[label]))
+                self.scatters[label][-1].set_visible(False)
+
+    def toggle(self, selected, label=None):
+        for scatter in self.scatters[label]:
+            scatter.set_visible(selected)
+        self.canvas.draw()
+
+
+
+class ClusterPane(widgets.QFrame):
+    """For viewing cluster data and hooks when clusters are selected
+    """
+    def __init__(self, dataset, colors, parent=None):
+        super().__init__(parent)
+        pass
+
+
+if __name__ == "__main__":
+    import sys
+    import suss.io
+
+    app = widgets.QApplication(sys.argv)
+
+    dataset = suss.io.read_pickle(sys.argv[1])
+
+    # sorted_dataset = suss.io.read_pickle("/Users/kevinyu/Projects/solid-garbanzo/"
+    #         "datasets/GreYel_sorted-e10.pkl")
+    # scatter_data = suss.io.read_numpy("/Users/kevinyu/Projects/solid-garbanzo/"
+    #         "datasets/GreYel_spacetime-e10.npy")
+    main = widgets.QMainWindow()
+    window = ProjectionsPane(dataset, get_color_dict(dataset.labels), facecolor="#333333")# , inactive_color="#BBBBBB") #, scatter_data)
+    main.setCentralWidget(window)
+    # main.resize(600, 680)
+    main.show()
+    sys.exit(app.exec_())
+
