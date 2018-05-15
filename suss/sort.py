@@ -155,7 +155,7 @@ def default_sort(times, waveforms, sample_rate, sparse_fn):
             n_components=25,
             mode="kmeans",
             transform=sparse_fn)
-    denoised_clusters = prune(denoised_clusters, 10)
+    denoised_clusters = prune(denoised_clusters, 5)
 
     clustered_clusters = cluster_step(denoised_clusters,
             dt=5 * 60.0,
@@ -173,7 +173,7 @@ def default_sort(times, waveforms, sample_rate, sparse_fn):
         perplexity=30.0,
     )
 
-    hdb = hdbscan.HDBSCAN(min_cluster_size=5)
+    hdb = hdbscan.HDBSCAN(min_cluster_size=10)
     labels = hdb.fit_predict(space_time)
 
     result = clustered_clusters.cluster(labels).flatten(assign_labels=True)
