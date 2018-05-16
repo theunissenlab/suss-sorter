@@ -135,7 +135,7 @@ class ProjectionsPane(widgets.QFrame):
             ],
             bins=200,
             color=list(map(self.colors.get, labels)),
-            alpha=0.5,
+            alpha=0.9,
             stacked=True)
 
         # Plot 2d projections
@@ -150,6 +150,7 @@ class ProjectionsPane(widgets.QFrame):
         bad_idx = np.diff(selected_flattened.times) <= self.min_isi
         violations_within_cluster = bad_idx & (selected_flattened.labels[:-1] == selected_flattened.labels[1:])
         violations_across_cluster = bad_idx & (selected_flattened.labels[:-1] != selected_flattened.labels[1:])
+        total_across = (selected_flattened.labels[:-1] != selected_flattened.labels[1:])
 
         within_pairs = zip(
             lda2_data[:-1][::self.frac][violations_within_cluster[::self.frac]],
@@ -168,6 +169,19 @@ class ProjectionsPane(widgets.QFrame):
             self.ax_2d.plot(*zip(spike1, spike2), linewidth=1, color="#FFFFFF", alpha=1.0)
             self.ax_2d.plot(*zip(spike1, spike2), linewidth=0.5, color="Red",
                     linestyle="--", alpha=1.0)
+
+        if len(self.active_clusters) >= 2:
+            self.ax_2d.text(
+                    np.max(self.ax_2d.get_xlim()),
+                    np.max(self.ax_2d.get_ylim()),
+                    "ISI across\n{:.1f}% (n={})".format(
+                        100.0 * np.sum(violations_across_cluster) / np.sum(total_across),
+                        int(np.sum(total_across))
+                    ),
+                    fontsize=10,
+                    horizontalalignment="right",
+                    verticalalignment="top",
+            )
 
         self.canvas.draw()
 
@@ -351,6 +365,7 @@ class WaveformsPane(widgets.QFrame):
         self.active_clusters = active_clusters
         self.ax.clear()
         clear_axes(self.ax)
+        self.ax.set_xlim(0, 40)
         self.ax.grid(color="#CCCCCC", linestyle="-", linewidth=0.2)
 
         if len(self.active_clusters) == 0:
@@ -450,7 +465,6 @@ class TimeseriesPane(widgets.QFrame):
 
         self.scatters = defaultdict(list)
         for label in self.dataset.labels:
-            print(label, self.colors[label])
             for component, ax in enumerate(self.axes):
                 self.scatters[label].append(ax.scatter(
                     self.flattened.times[self.flattened.labels == label][::self.frac],
@@ -482,11 +496,12 @@ class ClusterPane(widgets.QFrame):
         self.canvas = FigureCanvas(fig)
         self.canvas.setFixedSize(*self.size)
         self.canvas.setStyleSheet("background-color:transparent;")
-        self.ax_wf = fig.add_axes([0, 0, 0.3, 1], ylim=(-250, 120), facecolor="#777777")
-        self.ax_isi = fig.add_axes([0.3, 0, 0.3, 1], facecolor="#999999")
-        self.ax_skew = fig.add_axes([0.6, 0, 0.4, 1], facecolor="#777777")
+        self.ax_wf = fig.add_axes([0, 0, 0.3, 1], facecolor="#BBBBBB")
+        self.ax_isi = fig.add_axes([0.3, 0, 0.3, 1], facecolor="#CCCCCC")
+        self.ax_skew = fig.add_axes([0.6, 0, 0.4, 1], facecolor="#BBBBBB")
         clear_axes(self.ax_wf, self.ax_isi, self.ax_skew)
-        self.ax_skew.grid(color="#DDDDDD", linestyle=":", linewidth=0.1)
+        self.ax_skew.grid(color="#888888", linestyle=":", linewidth=1)
+        self.ax_wf.grid(color="#888888", linestyle=":", linewidth=1)
 
         layout = widgets.QVBoxLayout()
         layout.addWidget(self.canvas)
@@ -498,18 +513,19 @@ class ClusterPane(widgets.QFrame):
         std = np.std(cluster.waveforms, axis=0)
 
         self.ax_wf.fill_between(np.arange(len(mean)), mean - std, mean + std, color=self.color, alpha=0.1)
-        self.ax_wf.plot(mean, color=self.color, alpha=0.1)
+        self.ax_wf.plot(mean, color=self.color, alpha=1.0, linewidth=2)
+        self.ax_wf.vlines(0, 0, -50, linewidth=1, color="Black")
 
         isi = np.diff(cluster.times)
         isi_violations = np.sum(isi < 0.001) / len(isi)
-        self.ax_isi.hist(isi, bins=50, range=(0, 0.05), density=True)
-        self.ax_isi.vlines(0.001, *self.ax_isi.get_ylim(), color="Red", linestyle="--")
-        self.ax_isi.text(0.03, 0.1, "{:.1f}% violations".format(100.0 * isi_violations), fontsize=5)
+        self.ax_isi.hist(isi, bins=50, range=(0, 0.05), density=True, color=self.color)
+        # self.ax_isi.vlines(0.001, *self.ax_isi.get_ylim(), color="Red", linestyle="--")
+        self.ax_isi.text(0.01, self.ax_isi.get_ylim()[1] * 0.7, "{:.1f}% < 1ms".format(100.0 * isi_violations), fontsize=5)
 
         peaks = np.min(cluster.waveforms, axis=1)
-        self.ax_skew.hist(peaks, bins=100, density=True)
-        skew = np.mean((peaks - np.mean(peaks)) ** 3)
-        self.ax_skew.text(-30, 0.1, "skew: {:.1f}".format(skew), fontsize=5)
+        self.ax_skew.hist(peaks, bins=100, density=True, color="#DDDDDD")
+        skew = np.mean(((peaks - np.mean(peaks)) / np.std(peaks)) ** 3)
+        self.ax_skew.text(np.mean(self.ax_skew.get_xlim()), self.ax_skew.get_ylim()[1] * 0.7, "skew: {:.1f}".format(skew), fontsize=5)
         self.canvas.draw()
 
 
@@ -528,9 +544,13 @@ class ClusterSelector(widgets.QScrollArea):
         cluster_frame = widgets.QGroupBox()
         all_cluster_layout = widgets.QVBoxLayout()
 
-        for label, cluster in zip(self.dataset.labels, self.dataset.nodes):
+        ordered_idx = np.argsort(self.dataset.labels)
+
+        for label_idx in ordered_idx:
+            label = self.dataset.labels[label_idx]
+            cluster = self.dataset.nodes[label_idx]
             cluster_layout = widgets.QHBoxLayout()
-            button = widgets.QPushButton("{}".format(label))
+            button = widgets.QPushButton("{} (n={})".format(label, cluster.waveform_count))
             button.setCheckable(True)
             button.setDefault(False)
             button.setAutoDefault(False)

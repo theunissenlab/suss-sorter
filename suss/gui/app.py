@@ -28,26 +28,53 @@ class App(widgets.QMainWindow):
         self.setWindowTitle(self.title)
         mainMenu = self.menuBar()
         fileMenu = mainMenu.addMenu("File")
-        load_action = widgets.QAction("Load Dataset", self)
+        load_action = widgets.QAction("Find dataset", self)
+        load_action = widgets.QAction("Close", self)
         fileMenu.addAction(load_action)
         load_action.triggered.connect(self.load_dataset)
-        self.show()
+        load_action.triggered.connect(self.close)
 
+        self.dataset_loader = DatasetLoader(self)
+        self.setCentralWidget(self.dataset_loader)
+        self.dataset_loader.main_button.clicked.connect(self.load_dataset)
+        self.dataset_loader.quit_button.clicked.connect(self.close)
+
+        rect = self.frameGeometry()
+        center = widgets.QDesktopWidget().availableGeometry().center()
+        rect.moveCenter(center)
+        self.move(rect.topLeft())
+
+        self.show()
+            
     def load_dataset(self):
         options = widgets.QFileDialog.Options()
         options |= widgets.QFileDialog.DontUseNativeDialog
         selected_file, _ = widgets.QFileDialog.getOpenFileName(self,
             "Pickle Files (*.pkl)",
             options=options)
-        dataset = suss.io.read_pickle(selected_file)
-        self.suss_viewer = SussViewer(dataset)
-        self.setCentralWidget(self.suss_viewer)
-        self.show()
+        if not selected_file:
+            return
+        else:
+            dataset = suss.io.read_pickle(selected_file)
+            self.suss_viewer = SussViewer(dataset, self)
+            self.setCentralWidget(self.suss_viewer)
+            self.show()
+
+
+class DatasetLoader(widgets.QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        layout = widgets.QVBoxLayout(self)
+        self.main_button = widgets.QPushButton("Load Dataset", self)
+        self.quit_button = widgets.QPushButton("Quit", self)
+        layout.addWidget(self.main_button)
+        layout.addWidget(self.quit_button)
+        self.setLayout(layout)
 
 
 class SussViewer(widgets.QFrame):
 
-    def __init__(self, dataset, parent=None):
+    def __init__(self, dataset=None, parent=None):
         super().__init__(parent)
         self.dataset = dataset
         self.active_clusters = set()
