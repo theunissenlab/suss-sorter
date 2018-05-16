@@ -466,10 +466,96 @@ class TimeseriesPane(widgets.QFrame):
         self.canvas.draw()
 
 
-
 class ClusterPane(widgets.QFrame):
+
+    def __init__(self, cluster, color, size=(200, 50), parent=None):
+        super().__init__(parent)
+        self.cluster = cluster
+        self.color = color
+        self.size = size
+
+        self.setup_layout()
+        self.setup_data()
+
+    def setup_layout(self):
+        fig = Figure()
+        self.canvas = FigureCanvas(fig)
+        self.canvas.setFixedSize(*self.size)
+        self.canvas.setStyleSheet("background-color:transparent;")
+        self.ax_wf = fig.add_axes([0, 0, 0.3, 1], ylim=(-250, 120), facecolor="#777777")
+        self.ax_isi = fig.add_axes([0.3, 0, 0.3, 1], facecolor="#999999")
+        self.ax_skew = fig.add_axes([0.6, 0, 0.4, 1], facecolor="#777777")
+        clear_axes(self.ax_wf, self.ax_isi, self.ax_skew)
+        self.ax_skew.grid(color="#DDDDDD", linestyle=":", linewidth=0.1)
+
+        layout = widgets.QVBoxLayout()
+        layout.addWidget(self.canvas)
+        self.setLayout(layout)
+
+    def setup_data(self):
+        cluster = self.cluster.flatten()
+        mean = np.mean(cluster.waveforms, axis=0)
+        std = np.std(cluster.waveforms, axis=0)
+
+        self.ax_wf.fill_between(np.arange(len(mean)), mean - std, mean + std, color=self.color, alpha=0.1)
+        self.ax_wf.plot(mean, color=self.color, alpha=0.1)
+
+        isi = np.diff(cluster.times)
+        isi_violations = np.sum(isi < 0.001) / len(isi)
+        self.ax_isi.hist(isi, bins=50, range=(0, 0.05), density=True)
+        self.ax_isi.vlines(0.001, *self.ax_isi.get_ylim(), color="Red", linestyle="--")
+        self.ax_isi.text(0.03, 0.1, "{:.1f}% violations".format(100.0 * isi_violations), fontsize=5)
+
+        peaks = np.min(cluster.waveforms, axis=1)
+        self.ax_skew.hist(peaks, bins=100, density=True)
+        skew = np.mean((peaks - np.mean(peaks)) ** 3)
+        self.ax_skew.text(-30, 0.1, "skew: {:.1f}".format(skew), fontsize=5)
+        self.canvas.draw()
+
+
+class ClusterSelector(widgets.QScrollArea):
     """For viewing cluster data and hooks when clusters are selected
     """
-    def __init__(self, dataset, colors, parent=None):
+    def __init__(self, dataset, colors, cb, parent=None):
         super().__init__(parent)
-        pass
+        self.dataset = dataset
+        self.colors = colors
+        self.cb = cb
+        
+        self.setup()
+
+    def setup(self):
+        cluster_frame = widgets.QGroupBox()
+        all_cluster_layout = widgets.QVBoxLayout()
+
+        for label, cluster in zip(self.dataset.labels, self.dataset.nodes):
+            cluster_layout = widgets.QHBoxLayout()
+            button = widgets.QPushButton("{}".format(label))
+            button.setCheckable(True)
+            button.setDefault(False)
+            button.setAutoDefault(False)
+            button.clicked[bool].connect(partial(self.cb, label=label))
+            color = "rgba({}, {}, {})".format(*(255 * np.array(self.colors.get(label))[:3]))
+            button.setStyleSheet("""
+                QPushButton:checked
+                {{
+                    border: 4px solid #444444;
+                    border-style: inset;
+                }}
+                QPushButton {{
+                    background-color: {};
+                }}
+            """.format(color))
+            cluster_layout.addWidget(button)
+            cluster_layout.addWidget(ClusterPane(cluster, self.colors.get(label)))
+            all_cluster_layout.addLayout(cluster_layout)
+            
+        cluster_frame.setLayout(all_cluster_layout)
+        self.setWidget(cluster_frame)
+        self.setWidgetResizable(True)
+        self.setFixedWidth(350)
+
+        # layout = widgets.QVBoxLayout()
+        # layout.addWidget(cluster_frame)
+        # self.setLayout(layout)
+

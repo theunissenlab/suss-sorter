@@ -5,6 +5,7 @@ from PyQt5 import QtWidgets as widgets
 
 import suss.io
 from components import (
+    ClusterSelector,
     ISIPane,
     OverviewScatterPane,
     ProjectionsPane,
@@ -16,6 +17,7 @@ from components import (
 
 
 class App(widgets.QMainWindow):
+
     def __init__(self):
         super().__init__()
         self.title = "SUSS Viewer"
@@ -26,7 +28,7 @@ class App(widgets.QMainWindow):
         self.setWindowTitle(self.title)
         mainMenu = self.menuBar()
         fileMenu = mainMenu.addMenu("File")
-        load_action = widgets.QAction("Load", self)
+        load_action = widgets.QAction("Load Dataset", self)
         fileMenu.addAction(load_action)
         load_action.triggered.connect(self.load_dataset)
         self.show()
@@ -58,8 +60,9 @@ class SussViewer(widgets.QFrame):
         self.timeseries = TimeseriesPane(self.dataset, color_dict, size=(700, 100), facecolor="#888888")
         self.waveforms = WaveformsPane(self.dataset, color_dict, size=(300, 250), facecolor="#444444")
         self.isi = ISIPane(self.dataset, color_dict, size=(200, 100), facecolor="#444444")
+        self.cluster_selector = ClusterSelector(self.dataset, color_dict, self.toggle)
 
-        scroll_area = selector_area(self.dataset, 140, color_dict, self.toggle)
+        # scroll_area = selector_area(self.dataset, 140, color_dict, self.toggle)
 
         outer_2 = widgets.QHBoxLayout()
         outer_1 = widgets.QVBoxLayout()
@@ -74,7 +77,7 @@ class SussViewer(widgets.QFrame):
         inner_1.addLayout(inner_2)
         outer_1.addLayout(inner_1)
         outer_1.addWidget(self.timeseries)
-        outer_2.addWidget(scroll_area)
+        outer_2.addWidget(self.cluster_selector)
         outer_2.addLayout(outer_1)
 
         self.setLayout(outer_2)
