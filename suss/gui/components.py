@@ -283,21 +283,25 @@ class ISIPane(widgets.QFrame):
 
         clusters = self.dataset.select(
             np.isin(self.dataset.labels, list(self.active_clusters))
-        ).flatten()
+        )
 
-        isi_arr = np.diff(clusters.times) 
+        flattened = clusters.flatten()
+
+        isi = np.diff(flattened.times) 
 
         self.ax.hist(
-            isi_arr,
+            isi,
             bins=50,
             range=(0, 0.05),
-            color="#BBBBBB",
-            alpha=0.8
+            color="#888888",
+            alpha=0.8,
+            density=True
         )
         self.ax.vlines(0.001, *self.ax.get_ylim(), color="Red", linestyle="--")
+
         self.text_ax.text(0.5, 0.7,
                 "{:.1f}%\nISI violations".format(
-                    100.0 * np.sum(isi_arr <= 0.001) / len(isi_arr)
+                    100.0 * np.sum(isi <= 0.001) / len(isi)
                 ),
                 fontsize=8,
                 color="#BBBBBB"
@@ -323,7 +327,9 @@ class WaveformsPane(widgets.QFrame):
         fig = Figure()
         self.canvas = FigureCanvas(fig)
         self.canvas.setFixedSize(*self.size)
-        self.ax = fig.add_axes([0, 0, 1, 1], facecolor=self.facecolor, ylim=(-250, 120))
+        self.ax = fig.add_axes([0, 0, 1, 1], facecolor=self.facecolor,
+                xlim=(0, 40),
+                ylim=(-250, 120))
         clear_axes(self.ax)
         self.ax.grid(color="#CCCCCC", linestyle="-", linewidth=0.2)
 
@@ -467,24 +473,3 @@ class ClusterPane(widgets.QFrame):
     def __init__(self, dataset, colors, parent=None):
         super().__init__(parent)
         pass
-
-
-if __name__ == "__main__":
-    import sys
-    import suss.io
-
-    app = widgets.QApplication(sys.argv)
-
-    dataset = suss.io.read_pickle(sys.argv[1])
-
-    # sorted_dataset = suss.io.read_pickle("/Users/kevinyu/Projects/solid-garbanzo/"
-    #         "datasets/GreYel_sorted-e10.pkl")
-    # scatter_data = suss.io.read_numpy("/Users/kevinyu/Projects/solid-garbanzo/"
-    #         "datasets/GreYel_spacetime-e10.npy")
-    main = widgets.QMainWindow()
-    window = ProjectionsPane(dataset, get_color_dict(dataset.labels), facecolor="#333333")# , inactive_color="#BBBBBB") #, scatter_data)
-    main.setCentralWidget(window)
-    # main.resize(600, 680)
-    main.show()
-    sys.exit(app.exec_())
-

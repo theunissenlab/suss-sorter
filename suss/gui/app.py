@@ -1,14 +1,46 @@
+import sys
+
 import numpy as np
 from PyQt5 import QtWidgets as widgets
 
-from components import (ProjectionsPane,
-        OverviewScatterPane,
-        TimeseriesPane,
-        WaveformsPane,
-        ISIPane,
-        get_color_dict,
-        selector_area
-        )
+import suss.io
+from components import (
+    ISIPane,
+    OverviewScatterPane,
+    ProjectionsPane,
+    TimeseriesPane,
+    WaveformsPane,
+    get_color_dict,
+    selector_area
+)
+
+
+class App(widgets.QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.title = "SUSS Viewer"
+        self.suss_viewer = None
+        self.init_ui()
+
+    def init_ui(self):
+        self.setWindowTitle(self.title)
+        mainMenu = self.menuBar()
+        fileMenu = mainMenu.addMenu("File")
+        load_action = widgets.QAction("Load", self)
+        fileMenu.addAction(load_action)
+        load_action.triggered.connect(self.load_dataset)
+        self.show()
+
+    def load_dataset(self):
+        options = widgets.QFileDialog.Options()
+        options |= widgets.QFileDialog.DontUseNativeDialog
+        selected_file, _ = widgets.QFileDialog.getOpenFileName(self,
+            "Pickle Files (*.pkl)",
+            options=options)
+        dataset = suss.io.read_pickle(selected_file)
+        self.suss_viewer = SussViewer(dataset)
+        self.setCentralWidget(self.suss_viewer)
+        self.show()
 
 
 class SussViewer(widgets.QFrame):
@@ -60,15 +92,7 @@ class SussViewer(widgets.QFrame):
 
 
 if __name__ == "__main__":
-    import sys
-    import suss.io
-
     app = widgets.QApplication(sys.argv)
-
-    dataset = suss.io.read_pickle(sys.argv[1])
-    main = widgets.QMainWindow()
-    viewer = SussViewer(dataset)
-    main.setCentralWidget(viewer)
-    main.show()
+    window = App()
     sys.exit(app.exec_())
 
