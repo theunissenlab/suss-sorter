@@ -39,6 +39,16 @@ This project requires Python3.5+ (I recommend using a virtualenv.)
 
 #### From your python environment
 
+(with pip)
+```
+git clone https://github.com/kevinyu/solid-garbanzo.git
+pip install solid-garbonzo
+
+# uninstall
+pip uninstall suss
+```
+
+(standard)
 ```
 git clone https://github.com/kevinyu/solid-garbanzo.git
 cd solid-garbonzo
