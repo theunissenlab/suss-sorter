@@ -434,9 +434,9 @@ class TimeseriesPane(widgets.QFrame):
         self.setLayout(layout)
 
     def setup_data(self):
-        for scatters in self.scatters.values():
-            for scatter in scatters:
-                scatter.remove()
+        for ax in self.axes:
+            ax.clear()
+        clear_axes(*self.axes)
 
         self.flattened = self.dataset.flatten(assign_labels=True)
         self.data = LDA(n_components=self.n_components).fit_transform(

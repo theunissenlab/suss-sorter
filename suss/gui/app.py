@@ -32,9 +32,11 @@ class App(widgets.QMainWindow):
         self.setWindowTitle(self.title)
         mainMenu = self.menuBar()
         fileMenu = mainMenu.addMenu("File")
-        load_action = widgets.QAction("Find dataset", self)
-        close_action = widgets.QAction("Close", self)
+        load_action = widgets.QAction("Load", self)
+        save_action = widgets.QAction("Save curated dataset", self)
+        close_action = widgets.QAction("Exit", self)
         fileMenu.addAction(load_action)
+        fileMenu.addAction(save_action)
         fileMenu.addAction(close_action)
         load_action.triggered.connect(self.load_dataset)
         close_action.triggered.connect(self.close)
@@ -74,6 +76,7 @@ class App(widgets.QMainWindow):
             self.setCentralWidget(self.suss_viewer)
             self.resize(1200, 600)
             self.show()
+            save_action.triggered.connect(partial(self.save_dataset, self.suss_viewer.dataset))
 
     def save_dataset(self, dataset):
         options = widgets.QFileDialog.Options()
@@ -81,7 +84,7 @@ class App(widgets.QMainWindow):
 
         part1, part2 = self.selected_file.split("_")
         _, part2 = part2.split("-")
-        default_name = "{}curated{}".format(part1, part2)
+        default_name = "{}_curated-{}".format(part1, part2)
 
         file_name, _ = widgets.QFileDialog.getSaveFileName(
             self,
