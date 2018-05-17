@@ -238,14 +238,14 @@ class SubDataset(BaseDataset):
             self._data.sort(order="id")
 
     def merge(self, *nodes):
-        return self.parent.merge(*([self] + nodes))
+        return self.source.merge(*((self,) + nodes))
 
     @property
     def complement(self):
-        return self.parent.complement(self)
+        return self.source.complement(self)
 
     def split(self):
-        return self.parent.split(self)
+        return self.source.split(self)
 
     def select(self, selector):
         """Select by index (not by id!)"""

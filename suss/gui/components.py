@@ -5,6 +5,7 @@ import numpy as np
 from PyQt5 import QtWidgets as widgets
 from matplotlib import cm
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.collections import LineCollection
 from matplotlib.figure import Figure
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
 from sklearn.decomposition import PCA
@@ -76,7 +77,7 @@ class ProjectionsPane(widgets.QFrame):
     def setup_layout(self):
         fig = Figure()
         self.canvas = FigureCanvas(fig)
-        self.canvas.setFixedSize(*self.size)
+        # self.canvas.setFixedSize(*self.size)
         self.ax_1d = fig.add_axes([0, 0, 1, 0.2], facecolor=self.facecolor)
         self.ax_2d = fig.add_axes([0, 0.2, 1, 0.8], facecolor=self.facecolor)
         clear_axes(self.ax_1d, self.ax_2d)
@@ -88,13 +89,6 @@ class ProjectionsPane(widgets.QFrame):
 
     def setup_data(self):
         pass
-
-    def toggle(self, selected, label=None):
-        if selected:
-            self.active_clusters.add(label)
-        else:
-            self.active_clusters.remove(label)
-        self.update_selection(self.active_clusters)
 
     def update_selection(self, active_clusters):
         self.active_clusters = active_clusters
@@ -201,10 +195,6 @@ class OverviewScatterPane(widgets.QFrame):
         self.inactive_color = inactive_color
         self.facecolor = facecolor
 
-        flattened = dataset.flatten(1, assign_labels=True)
-        self.data = LDA(n_components=2).fit_transform(flattened.waveforms, flattened.labels)
-        self.labels = flattened.labels
-
         self.setup_layout()
         self.setup_data()
 
@@ -220,6 +210,10 @@ class OverviewScatterPane(widgets.QFrame):
         self.setLayout(layout)
 
     def setup_data(self):
+        flattened = self.dataset.flatten(1, assign_labels=True)
+        self.data = LDA(n_components=2).fit_transform(flattened.waveforms, flattened.labels)
+        self.labels = flattened.labels
+
         for label in self.dataset.labels:
             self.ax.scatter(
                 *self.data[self.labels == label].T,
@@ -238,8 +232,9 @@ class OverviewScatterPane(widgets.QFrame):
             self.scatters[label].set_visible(False)
         self.canvas.draw()
 
-    def toggle(self, selected, label=None):
-        self.scatters[label].set_visible(selected)
+    def update_selection(self, active_clusters):
+        for label in self.scatters:
+            self.scatters[label].set_visible(label in active_clusters)
         self.canvas.draw()
 
 
@@ -264,7 +259,7 @@ class ISIPane(widgets.QFrame):
     def setup_layout(self):
         fig = Figure()
         self.canvas = FigureCanvas(fig)
-        self.canvas.setFixedSize(*self.size)
+        self.canvas.setFixedHeight(self.size[1])
         self.ax = fig.add_axes([0, 0, 1, 1], facecolor=self.facecolor)
         self.text_ax = fig.add_axes([0, 0, 1, 1], xlim=(0, 1), ylim=(0, 1))
         self.text_ax.patch.set_alpha(0.0)
@@ -276,13 +271,6 @@ class ISIPane(widgets.QFrame):
 
     def setup_data(self):
         pass
-
-    def toggle(self, selected, label=None):
-        if selected:
-            self.active_clusters.add(label)
-        else:
-            self.active_clusters.remove(label)
-        self.update_selection(self.active_clusters)
 
     def update_selection(self, active_clusters):
         self.active_clusters = active_clusters
@@ -340,7 +328,7 @@ class WaveformsPane(widgets.QFrame):
     def setup_layout(self):
         fig = Figure()
         self.canvas = FigureCanvas(fig)
-        self.canvas.setFixedSize(*self.size)
+        # self.canvas.setFixedSize(*self.size)
         self.ax = fig.add_axes([0, 0, 1, 1], facecolor=self.facecolor,
                 xlim=(0, 40),
                 ylim=(-250, 120))
@@ -353,13 +341,6 @@ class WaveformsPane(widgets.QFrame):
 
     def setup_data(self):
         pass
-
-    def toggle(self, selected, label=None):
-        if selected:
-            self.active_clusters.add(label)
-        else:
-            self.active_clusters.remove(label)
-        self.update_selection(self.active_clusters)
 
     def update_selection(self, active_clusters):
         self.active_clusters = active_clusters
@@ -377,14 +358,16 @@ class WaveformsPane(widgets.QFrame):
         )
         flattened = selected_clusters.flatten(assign_labels=True)
 
-
         for label in self.active_clusters:
-            self.ax.plot(
-                flattened.waveforms[flattened.labels == label][::self.frac].T,
-                linewidth=0.1,
-                alpha=0.7,
-                color=self.colors[label]
-            )
+            line_segments = LineCollection(
+                    [
+                        np.column_stack([np.arange(len(wf)), wf])
+                        for wf in flattened.waveforms[flattened.labels == label][::self.frac]
+                    ],
+                    color=self.colors[label],
+                    linewidth=0.1,
+                    alpha=0.7)
+            self.ax.add_collection(line_segments)
 
         for label in self.active_clusters:
             self.ax.plot(
@@ -426,10 +409,7 @@ class TimeseriesPane(widgets.QFrame):
         self.inactive_color = inactive_color
         self.facecolor = facecolor
         self.n_components=n_components
-
-        self.flattened = dataset.flatten(assign_labels=True)
-        self.data = LDA(n_components=n_components).fit_transform(
-            self.flattened.waveforms, self.flattened.labels)
+        self.scatters = {}
 
         self.setup_layout()
         self.setup_data()
@@ -437,7 +417,7 @@ class TimeseriesPane(widgets.QFrame):
     def setup_layout(self):
         fig = Figure()
         self.canvas = FigureCanvas(fig)
-        self.canvas.setFixedSize(*self.size)
+        # self.canvas.setFixedHeight(self.size[1])
 
         self.axes = []
         for component in range(self.n_components):
@@ -454,6 +434,14 @@ class TimeseriesPane(widgets.QFrame):
         self.setLayout(layout)
 
     def setup_data(self):
+        for scatters in self.scatters.values():
+            for scatter in scatters:
+                scatter.remove()
+
+        self.flattened = self.dataset.flatten(assign_labels=True)
+        self.data = LDA(n_components=self.n_components).fit_transform(
+            self.flattened.waveforms, self.flattened.labels)
+
         for component, ax in enumerate(self.axes):
             ax.scatter(
                 self.flattened.times[::self.frac],
@@ -462,21 +450,21 @@ class TimeseriesPane(widgets.QFrame):
                 alpha=0.1,
                 color=self.inactive_color
             )
-
         self.scatters = defaultdict(list)
         for label in self.dataset.labels:
             for component, ax in enumerate(self.axes):
                 self.scatters[label].append(ax.scatter(
                     self.flattened.times[self.flattened.labels == label][::self.frac],
                     self.data[self.flattened.labels == label][::self.frac, component],
-                    s=1,
-                    alpha=0.2,
+                    s=2,
+                    alpha=0.4,
                     color=self.colors[label]))
                 self.scatters[label][-1].set_visible(False)
 
-    def toggle(self, selected, label=None):
-        for scatter in self.scatters[label]:
-            scatter.set_visible(selected)
+    def update_selection(self, active_clusters):
+        for label in self.scatters:
+            for scatter in self.scatters[label]:
+                scatter.set_visible(label in active_clusters)
         self.canvas.draw()
 
 
@@ -512,7 +500,7 @@ class ClusterPane(widgets.QFrame):
         mean = np.mean(cluster.waveforms, axis=0)
         std = np.std(cluster.waveforms, axis=0)
 
-        self.ax_wf.fill_between(np.arange(len(mean)), mean - std, mean + std, color=self.color, alpha=0.1)
+        self.ax_wf.fill_between(np.arange(len(mean)), mean - std, mean + std, color=self.color, alpha=0.5)
         self.ax_wf.plot(mean, color=self.color, alpha=1.0, linewidth=2)
         self.ax_wf.vlines(0, 0, -50, linewidth=1, color="Black")
 
@@ -537,10 +525,11 @@ class ClusterSelector(widgets.QScrollArea):
         self.dataset = dataset
         self.colors = colors
         self.cb = cb
-        
-        self.setup()
 
-    def setup(self):
+        self.setup_data()
+
+    def setup_data(self):
+        self.buttons = {}
         cluster_frame = widgets.QGroupBox()
         all_cluster_layout = widgets.QVBoxLayout()
 
@@ -566,6 +555,7 @@ class ClusterSelector(widgets.QScrollArea):
                     background-color: {};
                 }}
             """.format(color))
+            self.buttons[label] = button
             cluster_layout.addWidget(button)
             cluster_layout.addWidget(ClusterPane(cluster, self.colors.get(label)))
             all_cluster_layout.addLayout(cluster_layout)
@@ -573,9 +563,36 @@ class ClusterSelector(widgets.QScrollArea):
         cluster_frame.setLayout(all_cluster_layout)
         self.setWidget(cluster_frame)
         self.setWidgetResizable(True)
-        self.setFixedWidth(350)
+        self.setFixedWidth(380)
 
         # layout = widgets.QVBoxLayout()
         # layout.addWidget(cluster_frame)
         # self.setLayout(layout)
 
+    def update_selection(self, active_clusters):
+        for label in self.buttons:
+            self.buttons[label].setChecked(label in active_clusters)
+
+
+class ClusterManipulationOptions(widgets.QWidget):
+    def __init__(self, reset_cb, clear_cb, merge_cb, save_cb, parent=None):
+        super().__init__(parent)
+        layout = widgets.QGridLayout(self)
+
+        self.clear_button = widgets.QPushButton("Clear", self)
+        self.reset_button = widgets.QPushButton("Reset", self)
+        self.reset_button.setStyleSheet("QPushButton {background-color: red;}")
+        self.merge_button = widgets.QPushButton("Merge", self)
+        self.save_button = widgets.QPushButton("Save", self)
+        self.save_button.setStyleSheet("QPushButton {background-color: green;}")
+        self.reset_button.clicked.connect(reset_cb)
+        self.clear_button.clicked.connect(clear_cb)
+        self.merge_button.clicked.connect(merge_cb)
+        self.save_button.clicked.connect(save_cb)
+
+        layout.addWidget(self.reset_button, 0, 0, 1, 1)
+        layout.addWidget(self.merge_button, 1, 0, 1, 1)
+        layout.addWidget(self.save_button, 2, 0, 1, 1)
+
+        self.setLayout(layout)
+        self.setFixedWidth(100)
