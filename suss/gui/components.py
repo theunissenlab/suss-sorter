@@ -211,8 +211,14 @@ class OverviewScatterPane(widgets.QFrame):
 
     def setup_data(self):
         flattened = self.dataset.flatten(1, assign_labels=True)
-        self.data = LDA(n_components=2).fit_transform(flattened.waveforms, flattened.labels)
-        self.labels = flattened.labels
+        if len(self.dataset.nodes) == 1:
+            return
+        elif len(self.dataset.nodes) > 2:
+            self.data = LDA(n_components=2).fit_transform(flattened.waveforms, flattened.labels)
+            self.labels = flattened.labels
+        else:
+            self.data = PCA(n_components=2).fit_transform(flattened.waveforms, flattened.labels)
+            self.labels = flattened.labels
 
         for label in self.dataset.labels:
             self.ax.scatter(
@@ -439,8 +445,12 @@ class TimeseriesPane(widgets.QFrame):
         clear_axes(*self.axes)
 
         self.flattened = self.dataset.flatten(assign_labels=True)
-        self.data = LDA(n_components=self.n_components).fit_transform(
-            self.flattened.waveforms, self.flattened.labels)
+        if len(self.dataset.nodes) <= 2:
+            self.data = PCA(n_components=self.n_components).fit_transform(
+                self.flattened.waveforms, self.flattened.labels)
+        else:
+            self.data = LDA(n_components=self.n_components).fit_transform(
+                self.flattened.waveforms, self.flattened.labels)
 
         for component, ax in enumerate(self.axes):
             ax.scatter(

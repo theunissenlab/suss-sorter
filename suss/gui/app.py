@@ -1,5 +1,6 @@
 import os
 import sys
+from functools import partial
 
 import numpy as np
 from PyQt5 import QtWidgets as widgets
@@ -33,10 +34,10 @@ class App(widgets.QMainWindow):
         mainMenu = self.menuBar()
         fileMenu = mainMenu.addMenu("File")
         load_action = widgets.QAction("Load", self)
-        save_action = widgets.QAction("Save curated dataset", self)
+        self.save_action = widgets.QAction("Save curated dataset", self)
         close_action = widgets.QAction("Exit", self)
         fileMenu.addAction(load_action)
-        fileMenu.addAction(save_action)
+        fileMenu.addAction(self.save_action)
         fileMenu.addAction(close_action)
         load_action.triggered.connect(self.load_dataset)
         close_action.triggered.connect(self.close)
@@ -76,7 +77,7 @@ class App(widgets.QMainWindow):
             self.setCentralWidget(self.suss_viewer)
             self.resize(1200, 600)
             self.show()
-            save_action.triggered.connect(partial(self.save_dataset, self.suss_viewer.dataset))
+            self.save_action.triggered.connect(partial(self.save_dataset, self.suss_viewer.dataset))
 
     def save_dataset(self, dataset):
         options = widgets.QFileDialog.Options()
