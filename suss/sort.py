@@ -190,37 +190,29 @@ def sexy_sort(times, waveforms, sample_rate, sparse_fn=None):
 
     denoised_clusters = cluster_step(spike_dataset,
             dt=0.5 * 60.0,
-            n_components=25,
+            n_components=30,
             mode="kmeans",
             transform=None)
     denoised_clusters = prune(denoised_clusters, 5)
 
     clustered_clusters = cluster_step(denoised_clusters,
-            dt=5 * 60.0,
-            mode="tsne-dbscan",
-            transform=None,
+            dt=50 * 60.0,
+            n_components=30,
+            mode="kmeans",
+            transform=None
     )
     clustered_clusters = prune(clustered_clusters, 2)
 
-    # could try this twice
     tsned = space_time_transform(
         clustered_clusters,
         transform=None,
-        # zscore=True,
         waveform_features=2,
         time_features=False,
         perplexity=50.0,
     )
 
-    space_time = TSNE(n_components=2, perplexity=50.0).fit_transform(
-        np.hstack([
-            tsned,
-            scipy.stats.zscore(clustered_clusters.times[:, None], axis=0)
-        ])
-    )
-
     hdb = hdbscan.HDBSCAN(min_cluster_size=10)
-    labels = hdb.fit_predict(space_time)
+    labels = hdb.fit_predict(tsned)
 
     result = clustered_clusters.cluster(labels) #.flatten(assign_labels=True)
 
