@@ -8,6 +8,7 @@ from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
 from sklearn.mixture import BayesianGaussianMixture
+from sklearn.neighbors import KNeighborsClassifier
 
 try:
     from MulticoreTSNE import MulticoreTSNE as TSNE
@@ -184,6 +185,13 @@ def default_sort(times, waveforms, sample_rate, sparse_fn=None):
     return space_time, labels, result
 
 
+def reassign_unassigned(waveforms, labels):
+    neigh = KNeighborsClassifier(n_neighbors=1)
+    neigh.fit(waveforms[labels != -1], labels[labels != -1])
+    labels[np.where(labels == -1)] = neigh.predict(waveforms[np.where(labels == -1)])
+    return labels
+
+
 def sexy_sort(times, waveforms, sample_rate, sparse_fn=None):
     """Sort function with 'default' parameters"""
     spike_dataset = SpikeDataset(times=times, waveforms=waveforms, sample_rate=sample_rate)
@@ -206,17 +214,19 @@ def sexy_sort(times, waveforms, sample_rate, sparse_fn=None):
     tsned = space_time_transform(
         clustered_clusters,
         transform=None,
-        waveform_features=2,
+        waveform_features=20,
+        zscore=False,
         time_features=False,
-        perplexity=50.0,
+        perplexity=30.0,
     )
 
-    hdb = hdbscan.HDBSCAN(min_cluster_size=10)
+    hdb = hdbscan.HDBSCAN(min_cluster_size=2)
     labels = hdb.fit_predict(tsned)
+    labels = reassign_unassigned(clustered_clusters.waveforms, labels)
 
     result = clustered_clusters.cluster(labels) #.flatten(assign_labels=True)
 
-    return space_time, labels, result
+    return tsned, labels, result,
 
 
 def sort(
