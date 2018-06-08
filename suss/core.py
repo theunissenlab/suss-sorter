@@ -16,7 +16,10 @@ class BaseDataset(object):
         col_names, _col_data_dtype_pairs = zip(*columns.items())
         col_datas, col_dtypes = zip(*_col_data_dtype_pairs)
 
-        _order = np.argsort(times)
+        sorter = np.argsort(times)
+        _order = np.empty_like(sorter)
+        _order[sorter] = np.arange(len(sorter))
+
         self._data = np.array(
             list(zip(times, _order, *col_datas)),
             dtype=([
@@ -24,12 +27,6 @@ class BaseDataset(object):
                 ("id", "int32")
             ] + list(zip(col_names, col_dtypes)))
         )
-
-        # id should be a column that is always the same as the
-        # normal index by which the array is accessed.
-        # Ensure this by sorting by this column
-        if not all(self.ids[:-1] <= self.ids[1:]):
-            self._data.sort(order="id")
         self._data.sort(order="id")
 
     def __len__(self):
