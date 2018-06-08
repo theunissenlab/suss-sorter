@@ -232,6 +232,27 @@ class ClusterDataset(BaseDataset):
                 labels=self.labels[selector]
             )
 
+    def delete_node(self, node=None, idx=None, label=None):
+        if np.sum([node is not None, idx is not None, label is not None]) != 1:
+            raise ValueError("Only one of {node, idx, label} can be provided")
+        if label is not None:
+            match = np.where(self.labels == label)[0]
+        elif node is not None:
+            match = np.where(self.nodes == node)[0]
+        elif idx is not None:
+            match = [idx]
+
+        if len(match) > 1:
+            raise ValueError("More than one node matched label {}".format(label))
+        elif len(match) == 0:
+            raise ValueError("No node matched label {}".format(label))
+        else:
+            idx = match[0]
+
+        selector = np.eye(len(self))[idx].astype(np.bool)
+
+        return self.select(np.logical_not(selector), child=False)
+
     def add_nodes(self, *nodes):
         new_labels = np.arange(
                 np.max(self.labels) + 1,
