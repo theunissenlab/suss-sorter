@@ -434,7 +434,7 @@ class TimeseriesPane(widgets.QFrame):
                     facecolor=self.facecolor
                 )
             )
-        clear_axes(*self.axes)
+        clear_axes(*self.axes[:-1])
 
         layout = widgets.QVBoxLayout()
         layout.addWidget(self.canvas)
@@ -443,7 +443,7 @@ class TimeseriesPane(widgets.QFrame):
     def setup_data(self):
         for ax in self.axes:
             ax.clear()
-        clear_axes(*self.axes)
+        clear_axes(*self.axes[:-1])
 
         self.flattened = self.dataset.flatten(assign_labels=True)
         if len(self.dataset.nodes) <= self.n_components:
