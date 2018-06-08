@@ -16,7 +16,10 @@ class BaseDataset(object):
         col_names, _col_data_dtype_pairs = zip(*columns.items())
         col_datas, col_dtypes = zip(*_col_data_dtype_pairs)
 
-        _order = np.argsort(times)
+        sorter = np.argsort(times)
+        _order = np.empty_like(sorter)
+        _order[sorter] = np.arange(len(sorter))
+
         self._data = np.array(
             list(zip(times, _order, *col_datas)),
             dtype=([
@@ -24,12 +27,6 @@ class BaseDataset(object):
                 ("id", "int32")
             ] + list(zip(col_names, col_dtypes)))
         )
-
-        # id should be a column that is always the same as the
-        # normal index by which the array is accessed.
-        # Ensure this by sorting by this column
-        if not all(self.ids[:-1] <= self.ids[1:]):
-            self._data.sort(order="id")
         self._data.sort(order="id")
 
     def __len__(self):
@@ -129,12 +126,6 @@ class BaseDataset(object):
     def complement(self, node):
         return self.select(np.delete(self.ids, node.ids))
 
-    def split(self, *nodes):
-        """Divide dataset into datanodes containing given nodes and node excluding
-        """
-        combined = self.merge(*nodes)
-        return combined, self.complement(combined)
-
     def windows(self, dt):
         for t_start in np.arange(0.0, np.max(self.times), dt):
             t_stop = t_start + dt
@@ -204,7 +195,7 @@ class ClusterDataset(BaseDataset):
         sources = [subnode.source for subnode in subnodes]
         if sources[1:] != sources[:-1]:
             print("Warning... ClusterDataset being created with different "
-                    "source datasets. {}".format(subnodes))
+                "source datasets. {}".format(subnodes))
 
         if labels is None:
             labels = np.zeros(len(subnodes))
@@ -214,6 +205,97 @@ class ClusterDataset(BaseDataset):
             node=(subnodes, np.object),
             label=(labels, "int32")
         )
+
+    def select(self, selector, child=True):
+        """Select items by selection array
+
+        Args
+            selector: Boolean array with length equal to number of
+                clusters in dataset. Clusters corresponding to True will
+                be kept
+            child: Boolean flag indicating whether link to current dataset
+                should be preserved. If True, the created SubDataset()
+                object refers to this current object as its parent.
+                If False, returns a ClusterDataset with no relation to the
+                current object. Defaults to True.
+
+        Returns
+            Either a SubDataset of this ClusterDataset (child=True),
+            or a new ClusterDataset (child=False) whose nodes
+            correspond to the selector array.
+        """
+        if child:
+            return super().select(selector)
+        else:
+            return ClusterDataset(
+                self.nodes[selector],
+                labels=self.labels[selector]
+            )
+
+    def add_nodes(self, *nodes):
+        new_labels = np.arange(
+                np.max(self.labels) + 1,
+                np.max(self.labels) + len(nodes) + 1
+        )
+        return ClusterDataset(
+            np.concatenate([self.nodes, nodes]),
+            labels=np.concatenate([self.labels, new_labels])
+        )
+
+    def split_node(
+            self,
+            t_start,
+            t_stop,
+            node=None,
+            idx=None,
+            label=None,
+            keep_both=True):
+
+        if np.sum([node is not None, idx is not None, label is not None]) != 1:
+            raise ValueError("Only one of {node, idx, label} can be provided")
+        if label is not None:
+            match = np.where(self.labels == label)[0]
+        elif node is not None:
+            match = np.where(self.nodes == node)[0]
+        elif idx is not None:
+            match = [idx]
+
+        if len(match) > 1:
+            raise ValueError("More than one node matched label {}".format(label))
+        elif len(match) == 0:
+            raise ValueError("No node matched label {}".format(label))
+        else:
+            idx = match[0]
+
+        selector = np.eye(len(self))[idx].astype(np.bool)
+        in_range, out_range = self.nodes[idx].time_split(t_start, t_stop)
+        new_dataset = self.select(np.logical_not(selector), child=False)
+
+        if len(in_range) > 0:
+            new_dataset = new_dataset.add_nodes(in_range)
+        if keep_both and len(out_range) > 0:
+            new_dataset = new_dataset.add_nodes(out_range)
+
+        return new_dataset
+
+    def merge_nodes(self, labels=None, idxs=None, nodes=None):
+        if np.sum([nodes is not None, idxs is not None, labels is not None]) != 1:
+            raise ValueError("Only one of {nodes, idxs, labels} can be provided")
+        if labels is not None:
+            match = np.where(np.isin(self.labels, labels))[0]
+        elif node is not None:
+            match = np.where(np.isin(self.nodes, nodes))[0]
+        elif idx is not None:
+            match = idxs
+
+        selector = np.zeros(len(self)).astype(np.bool)
+        selector[match] = True
+
+        merged = SubDataset.merge(*self.select(selector).nodes)
+        new_dataset = self.select(np.logical_not(selector), child=False)
+        new_dataset = new_dataset.add_nodes(merged)
+
+        return new_dataset
 
 
 class SubDataset(BaseDataset):
@@ -225,7 +307,7 @@ class SubDataset(BaseDataset):
     """
     def __init__(self, parent_dataset, ids, source_dataset=None, labels=None):
         self.parent = parent_dataset
-        self.source = source_dataset or parent_dataset 
+        self.source = source_dataset or parent_dataset
 
         # Copy the selected subset of the parent's data.
         # If you are seeing unexpected behavior from this, perhaps
@@ -237,18 +319,71 @@ class SubDataset(BaseDataset):
         if not all(self.ids[:-1] <= self.ids[1:]):
             self._data.sort(order="id")
 
-    def merge(self, *nodes):
-        return self.source.merge(*((self,) + nodes))
-
     @property
     def complement(self):
         return self.source.complement(self)
 
-    def split(self):
-        return self.source.split(self)
+    def merge(self, *nodes):
+        """Merge this node with one or more other nodes"""
+        all_nodes = [self] + list(nodes)
+        return SubDataset(
+            self.parent,
+            ids=np.concatenate([node.ids for node in all_nodes]),
+            source_dataset=self.source
+        )
+
+    def split(self, selector):
+        """Split the SubDataset into two by selector array
+
+        Returns
+            Two SubDatasets that share the same parent.
+            The first returned matches selector == True, the
+            second matches selector == False
+
+        Example:
+            >>> clusters = ClusterDataset(...)
+            >>> flattned = clusters.flatten()
+            >>> early_cluster, late_cluster = flattened.split(
+            ...     flattened.times > np.median(flattened.times)
+            ... )
+        """
+        return self.select(selector), self.select(np.logical_not(selector))
+
+    def time_split(self, t_start, t_stop):
+        """Split node by a time range
+
+        recursively duplicates all subnodes until the bottom level
+        and reassigns their datapoints based on their time
+        """
+        if self.is_waveform:
+            selector = (self.times >= t_start) & (self.times < t_stop)
+            return self.split(selector)
+
+        within, without = zip(*[
+            node.time_split(t_start, t_stop)
+            for node in self.nodes
+        ])
+        within = [node for node in within if len(node)]
+        without = [node for node in without if len(node)]
+        labels = np.concatenate([
+            np.zeros(len(within)),
+            np.ones(len(without))
+        ]).astype(np.int)
+
+        clusters = ClusterDataset(np.concatenate([within, without]))
+        clusters = clusters.cluster(labels)
+
+        return (
+            clusters.select(clusters.labels == 0),
+            clusters.select(clusters.labels == 1)
+        )
 
     def select(self, selector):
-        """Select by index (not by id!)"""
+        """Select by index (not by id!)
+
+        Creates a SubDataset with the same parent
+        but with the selected subset of data.
+        """
         selected_subset = self._data[selector]
         return SubDataset(
                 self.parent,

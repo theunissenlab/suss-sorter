@@ -176,7 +176,54 @@ def default_sort(times, waveforms, sample_rate, sparse_fn):
     hdb = hdbscan.HDBSCAN(min_cluster_size=10)
     labels = hdb.fit_predict(space_time)
 
-    result = clustered_clusters.cluster(labels) #.flatten(assign_labels=True)
+    result = clustered_clusters.cluster(labels)
+
+    return space_time, labels, result
+
+
+def reassign_unassigned(waveforms, labels):
+    neigh = KNeighborsClassifier(n_neighbors=1)
+    if len(np.where(labels != -1)[0]) == 0:
+        return labels
+
+    neigh.fit(waveforms[labels != -1], labels[labels != -1])
+    labels[np.where(labels == -1)] = neigh.predict(waveforms[np.where(labels == -1)])
+    return labels
+
+
+def sexy_sort(times, waveforms, sample_rate, sparse_fn=None):
+    """Sort function with 'default' parameters"""
+    spike_dataset = SpikeDataset(times=times, waveforms=waveforms, sample_rate=sample_rate)
+
+    denoised_clusters = cluster_step(spike_dataset,
+            dt=0.5 * 60.0,
+            n_components=30,
+            mode="kmeans",
+            transform=None)
+    denoised_clusters = prune(denoised_clusters, 5)
+
+    clustered_clusters = cluster_step(denoised_clusters,
+            dt=50 * 60.0,
+            n_components=30,
+            mode="kmeans",
+            transform=None
+    )
+    clustered_clusters = prune(clustered_clusters, 2)
+
+    tsned = space_time_transform(
+        clustered_clusters,
+        transform=None,
+        waveform_features=20,
+        zscore=False,
+        time_features=False,
+        perplexity=30.0,
+    )
+
+    hdb = hdbscan.HDBSCAN(min_cluster_size=2)
+    labels = hdb.fit_predict(tsned)
+    labels = reassign_unassigned(clustered_clusters.waveforms, labels)
+
+    result = clustered_clusters.cluster(labels)
 
     return space_time, labels, result
 
