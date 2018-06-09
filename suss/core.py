@@ -303,16 +303,18 @@ class ClusterDataset(BaseDataset):
         if np.sum([nodes is not None, idxs is not None, labels is not None]) != 1:
             raise ValueError("Only one of {nodes, idxs, labels} can be provided")
         if labels is not None:
-            match = np.where(np.isin(self.labels, labels))[0]
+            match = np.where(np.isin(self.labels, list(labels)))[0]
         elif node is not None:
-            match = np.where(np.isin(self.nodes, nodes))[0]
+            match = np.where(np.isin(self.nodes, list(nodes)))[0]
         elif idx is not None:
             match = idxs
 
         selector = np.zeros(len(self)).astype(np.bool)
         selector[match] = True
 
-        merged = SubDataset.merge(*self.select(selector).nodes)
+        nodes = self.select(selector).nodes
+
+        merged = nodes[0].merge(*nodes[1:])
         new_dataset = self.select(np.logical_not(selector), child=False)
         new_dataset = new_dataset.add_nodes(merged)
 
