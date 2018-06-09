@@ -128,12 +128,17 @@ class SussViewer(widgets.QFrame):
         self.timeseries = TimeseriesPane(self.dataset, color_dict, size=(700, 100), facecolor="#888888")
         self.waveforms = WaveformsPane(self.dataset, color_dict, size=(300, 250), facecolor="#444444")
         self.isi = ISIPane(self.dataset, color_dict, size=(200, 100), facecolor="#444444")
-        self.cluster_selector = ClusterSelector(self.dataset, color_dict, self.toggle)
+        self.cluster_selector = ClusterSelector(
+                self.dataset,
+                color_dict,
+                self.toggle,
+                ondelete=self.delete)
         self.actions_panel = ClusterManipulationOptions(
             reset_cb=self.reset,
             clear_cb=self.clear,
             merge_cb=self.merge,
             save_cb=self.save,
+            load_cb=self.load,
         )
 
         # scroll_area = selector_area(self.dataset, 140, color_dict, self.toggle)
@@ -171,29 +176,24 @@ class SussViewer(widgets.QFrame):
             widgets.QMessageBox.warning(self, "Merge failed", "Not enough clusters selected to merge")
             return
 
-        new_cluster = self.dataset.select(
-            np.isin(
-                self.dataset.labels,
-                list(self.active_clusters)
-            )
-        )
-        complement = new_cluster.complement
+        old_labels = set(self.dataset.labels)
+        self.dataset = self.dataset.merge_nodes(labels=self.active_clusters)
+        new_labels = set(self.dataset.labels)
 
-        self.dataset = ClusterDataset(
-            np.concatenate([
-                [new_cluster.flatten(1)],
-                complement.nodes
-            ]),
-            labels=np.concatenate([
-                [new_cluster.labels[0]],
-                complement.labels
-            ])
-        )
-        self.active_clusters = set([new_cluster.labels[0]])
+        self.active_clusters = new_labels - old_labels
         self.dataset_updated()
 
     def save(self):
         self.parent().save_dataset(self.dataset)
+
+    def load(self):
+        self.parent().load_dataset()
+
+    def delete(self, label):
+        if label in self.active_clusters:
+            self.active_clusters.remove(label)
+        self.dataset = self.dataset.delete_node(label=label)
+        self.dataset_updated()
 
     def toggle(self, selected, label=None):
         if selected:
@@ -209,6 +209,16 @@ class SussViewer(widgets.QFrame):
         self.waveforms.dataset = self.dataset
         self.isi.dataset = self.dataset
         self.cluster_selector.dataset = self.dataset
+
+        color_dict = get_color_dict(self.dataset.labels)
+
+        self.projections.colors = color_dict
+        self.overview.colors = color_dict
+        self.timeseries.colors = color_dict
+        self.waveforms.colors = color_dict
+        self.isi.colors = color_dict
+        self.cluster_selector.colors = color_dict
+
         self.projections.setup_data()
         self.overview.setup_data()
         self.timeseries.setup_data()

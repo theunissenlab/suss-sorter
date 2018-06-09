@@ -210,7 +210,10 @@ class OverviewScatterPane(widgets.QFrame):
         self.setLayout(layout)
 
     def setup_data(self):
+        self.ax.clear()
+        clear_axes(self.ax)
         flattened = self.dataset.flatten(1, assign_labels=True)
+        self.scatters = {}
         if len(self.dataset.nodes) == 1:
             return
         elif len(self.dataset.nodes) > 2:
@@ -227,7 +230,6 @@ class OverviewScatterPane(widgets.QFrame):
                 alpha=0.1,
                 s=2,
             )
-        self.scatters = {}
         for label in self.dataset.labels:
             self.scatters[label] = self.ax.scatter(
                 *self.data[self.labels == label].T,
@@ -239,6 +241,7 @@ class OverviewScatterPane(widgets.QFrame):
         self.canvas.draw()
 
     def update_selection(self, active_clusters):
+        self.setup_data()
         for label in self.scatters:
             self.scatters[label].set_visible(label in active_clusters)
         self.canvas.draw()
@@ -480,7 +483,7 @@ class TimeseriesPane(widgets.QFrame):
 
 class ClusterPane(widgets.QFrame):
 
-    def __init__(self, cluster, color, size=(200, 50), parent=None):
+    def __init__(self, cluster, color, size=(200, 100), parent=None):
         super().__init__(parent)
         self.cluster = cluster
         self.color = color
@@ -512,7 +515,9 @@ class ClusterPane(widgets.QFrame):
 
         self.ax_wf.fill_between(np.arange(len(mean)), mean - std, mean + std, color=self.color, alpha=0.5)
         self.ax_wf.plot(mean, color=self.color, alpha=1.0, linewidth=2)
-        self.ax_wf.vlines(0, 0, -50, linewidth=1, color="Black")
+        self.ax_wf.vlines(0, 0, -50, linewidth=2, color="Black")
+        self.ax_wf.set_ylim(-250, 120)
+
 
         isi = np.diff(cluster.times)
         isi_violations = np.sum(isi < 0.001) / len(isi)
@@ -530,11 +535,12 @@ class ClusterPane(widgets.QFrame):
 class ClusterSelector(widgets.QScrollArea):
     """For viewing cluster data and hooks when clusters are selected
     """
-    def __init__(self, dataset, colors, cb, parent=None):
+    def __init__(self, dataset, colors, cb, ondelete=None, parent=None):
         super().__init__(parent)
         self.dataset = dataset
         self.colors = colors
         self.cb = cb
+        self.delete = ondelete
 
         self.setup_data()
 
@@ -549,6 +555,8 @@ class ClusterSelector(widgets.QScrollArea):
             label = self.dataset.labels[label_idx]
             cluster = self.dataset.nodes[label_idx]
             cluster_layout = widgets.QHBoxLayout()
+            buttons_layout = widgets.QHBoxLayout()
+
             button = widgets.QPushButton("{} (n={})".format(label, cluster.waveform_count))
             button.setCheckable(True)
             button.setDefault(False)
@@ -566,7 +574,21 @@ class ClusterSelector(widgets.QScrollArea):
                 }}
             """.format(color))
             self.buttons[label] = button
-            cluster_layout.addWidget(button)
+
+            buttons_layout.addWidget(button)
+
+            delete_button = widgets.QPushButton("X".format(label, cluster.waveform_count))
+            delete_button.clicked.connect(partial(self.delete, label=label))
+            color = "red"
+            delete_button.setStyleSheet("""
+                QPushButton {{
+                    background-color: {};
+                    width: 10px;
+                }}
+            """.format(color))
+            buttons_layout.addWidget(delete_button)
+
+            cluster_layout.addLayout(buttons_layout)
             cluster_layout.addWidget(ClusterPane(cluster, self.colors.get(label)))
             all_cluster_layout.addLayout(cluster_layout)
             
@@ -585,24 +607,27 @@ class ClusterSelector(widgets.QScrollArea):
 
 
 class ClusterManipulationOptions(widgets.QWidget):
-    def __init__(self, reset_cb, clear_cb, merge_cb, save_cb, parent=None):
+    def __init__(self, reset_cb, clear_cb, merge_cb, save_cb, load_cb, parent=None):
         super().__init__(parent)
         layout = widgets.QGridLayout(self)
 
+        self.load_button = widgets.QPushButton("Load", self)
         self.clear_button = widgets.QPushButton("Clear", self)
         self.reset_button = widgets.QPushButton("Reset", self)
         self.reset_button.setStyleSheet("QPushButton {background-color: red;}")
         self.merge_button = widgets.QPushButton("Merge", self)
         self.save_button = widgets.QPushButton("Save", self)
         self.save_button.setStyleSheet("QPushButton {background-color: green;}")
+        self.load_button.clicked.connect(load_cb)
         self.reset_button.clicked.connect(reset_cb)
         self.clear_button.clicked.connect(clear_cb)
         self.merge_button.clicked.connect(merge_cb)
         self.save_button.clicked.connect(save_cb)
 
-        layout.addWidget(self.reset_button, 0, 0, 1, 1)
-        layout.addWidget(self.merge_button, 1, 0, 1, 1)
-        layout.addWidget(self.save_button, 2, 0, 1, 1)
+        layout.addWidget(self.load_button, 0, 0, 1, 1)
+        layout.addWidget(self.reset_button, 1, 0, 1, 1)
+        layout.addWidget(self.merge_button, 2, 0, 1, 1)
+        layout.addWidget(self.save_button, 3, 0, 1, 1)
 
         self.setLayout(layout)
         self.setFixedWidth(100)
