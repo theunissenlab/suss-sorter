@@ -8,6 +8,7 @@ from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
 from sklearn.mixture import BayesianGaussianMixture
+from sklearn.neighbors import KNeighborsClassifier
 
 try:
     from MulticoreTSNE import MulticoreTSNE as TSNE
@@ -225,7 +226,7 @@ def sexy_sort(times, waveforms, sample_rate, sparse_fn=None):
 
     result = clustered_clusters.cluster(labels)
 
-    return space_time, labels, result
+    return tsned, labels, result
 
 
 def sort(
