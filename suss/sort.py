@@ -40,6 +40,9 @@ def cluster(dataset, n_components=2, mode= "kmeans", transform=None):
 
     n_components = min(n_components, len(dataset.waveforms))
 
+    if not len(dataset.waveforms):
+        return dataset.cluster([]).nodes
+
     data = transform(dataset.waveforms) if transform is not None else dataset.waveforms
 
     if mode == "tsne-dbscan":
@@ -117,6 +120,8 @@ def space_time_transform(node, transform=None, zscore=True,
         the T-SNE transform.
     """
     data = transform(node.waveforms) if transform is not None else node.waveforms
+    if not len(data):
+        return data
 
     if data.shape[1] >= waveform_features:
         if len(node.nodes) > waveform_features:
@@ -219,9 +224,12 @@ def sexy_sort(times, waveforms, sample_rate, sparse_fn=None):
         perplexity=30.0,
     )
 
-    hdb = hdbscan.HDBSCAN(min_cluster_size=2)
-    labels = hdb.fit_predict(tsned)
-    labels = reassign_unassigned(clustered_clusters.waveforms, labels)
+    if len(tsned):
+        hdb = hdbscan.HDBSCAN(min_cluster_size=2)
+        labels = hdb.fit_predict(tsned)
+        labels = reassign_unassigned(clustered_clusters.waveforms, labels)
+    else:
+        labels = []
 
     result = clustered_clusters.cluster(labels)
 

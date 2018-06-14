@@ -140,6 +140,9 @@ class BaseDataset(object):
             node.flatten(None if depth is None else depth - 1)
             for node in self.nodes
         ]
+        if not len(bottom_nodes):
+            return self  # FIXME (kevin): this is probably not the right way to handle this
+
         bottom_dataset = bottom_nodes[0].source
         bottom_ids = [node.ids for node in bottom_nodes]
 
