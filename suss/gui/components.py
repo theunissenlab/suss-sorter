@@ -214,7 +214,7 @@ class OverviewScatterPane(widgets.QFrame):
         clear_axes(self.ax)
         flattened = self.dataset.flatten(1, assign_labels=True)
         self.scatters = {}
-        if len(self.dataset.nodes) == 1:
+        if len(self.dataset.nodes) <= 1:
             self.scatters = {}
             return
         elif len(self.dataset.nodes) > 2:
@@ -449,6 +449,10 @@ class TimeseriesPane(widgets.QFrame):
         clear_axes(*self.axes[:-1])
 
         self.flattened = self.dataset.flatten(assign_labels=True)
+        self.scatters = defaultdict(list)
+
+        if not len(self.dataset.nodes):
+            return
         if len(self.dataset.nodes) <= self.n_components:
             self.data = PCA(n_components=self.n_components).fit_transform(
                 self.flattened.waveforms, self.flattened.labels)
@@ -464,7 +468,6 @@ class TimeseriesPane(widgets.QFrame):
                 alpha=0.1,
                 color=self.inactive_color
             )
-        self.scatters = defaultdict(list)
         for label in self.dataset.labels:
             for component, ax in enumerate(self.axes):
                 self.scatters[label].append(ax.scatter(

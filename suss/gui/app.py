@@ -91,7 +91,7 @@ class App(widgets.QMainWindow):
             _, part2 = part2.split("-")
             default_name = "{}_curated-{}".format(part1, part2)
         except:
-            default_name = self.selected_file
+            default_name = self.selected_file.replace("sorted", "curated")
 
         file_name, _ = widgets.QFileDialog.getSaveFileName(
             self,
