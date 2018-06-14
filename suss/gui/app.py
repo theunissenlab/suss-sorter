@@ -61,7 +61,7 @@ class App(widgets.QMainWindow):
             self,
             "Load dataset",
             ".",
-            "(*.pkl)",
+            "(*.pkl *.npy)",
             options=options)
         if not self.selected_file:
             return
@@ -72,7 +72,10 @@ class App(widgets.QMainWindow):
             self.setCentralWidget(loading)
             self.resize(1200, 600)
             self.show()
-            dataset = suss.io.read_pickle(self.selected_file)
+            if self.selected_file.endswith("pkl"):
+                dataset = suss.io.read_pickle(self.selected_file)
+            elif self.selected_file.endswith("npy"):
+                dataset = suss.io.read_numpy(self.selected_file)
             self.suss_viewer = SussViewer(dataset, self)
             self.setCentralWidget(self.suss_viewer)
             self.resize(1200, 600)
@@ -83,9 +86,12 @@ class App(widgets.QMainWindow):
         options = widgets.QFileDialog.Options()
         options |= widgets.QFileDialog.DontUseNativeDialog
 
-        part1, part2 = self.selected_file.split("_")
-        _, part2 = part2.split("-")
-        default_name = "{}_curated-{}".format(part1, part2)
+        try:
+            part1, part2 = self.selected_file.split("_")
+            _, part2 = part2.split("-")
+            default_name = "{}_curated-{}".format(part1, part2)
+        except:
+            default_name = self.selected_file
 
         file_name, _ = widgets.QFileDialog.getSaveFileName(
             self,

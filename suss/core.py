@@ -16,6 +16,7 @@ class BaseDataset(object):
         col_names, _col_data_dtype_pairs = zip(*columns.items())
         col_datas, col_dtypes = zip(*_col_data_dtype_pairs)
 
+        times = np.array(times).flatten()
         sorter = np.argsort(times)
         _order = np.empty_like(sorter)
         _order[sorter] = np.arange(len(sorter))

@@ -45,7 +45,7 @@ def cluster(dataset, n_components=2, mode= "kmeans", transform=None):
 
     if mode == "tsne-dbscan":
         clusterer = hdbscan.HDBSCAN(min_cluster_size=2)
-        data = TSNE(n_components=2, perplexity=10.0).fit_transform(data)
+        data = TSNE(n_components=2, perplexity=5.0, n_iter=2000).fit_transform(data)
         labels = clusterer.fit_predict(data)
         # replace -1 labels with unique labels (so they can get pruned)
         bad_labels = np.where(labels == -1)[0]
@@ -86,7 +86,7 @@ def cluster_step(dataset, dt, n_components=2, mode="kmeans", transform=None):
     _denoised_nodes = []
     _fn_start = time.time()
     for t_start, _, window in dataset.windows(dt=dt):
-        print("Clustering t={:.2f}.min. {:.1f}s elapsed.".format(
+        print("Clustering t={:.2f} min. {:.1f}s elapsed.".format(
             t_start / 60.0, time.time() - _fn_start), end="\r")
         _denoised_nodes.append(
             cluster(
@@ -96,6 +96,8 @@ def cluster_step(dataset, dt, n_components=2, mode="kmeans", transform=None):
                 transform=transform
             )
         )
+    print("Completed clustering of {:.2f} min in {:.1f}s.".format(
+        (t_start + dt) / 60.0, time.time() - _fn_start))
 
     return ClusterDataset(np.concatenate(_denoised_nodes))
 
@@ -139,7 +141,7 @@ def space_time_transform(node, transform=None, zscore=True,
     if zscore:
         space_time = scipy.stats.zscore(space_time, axis=0)
 
-    tsne = TSNE(n_components=2, perplexity=perplexity)
+    tsne = TSNE(n_components=2, perplexity=perplexity, n_iter=1000)
     return tsne.fit_transform(space_time)
 
 
@@ -147,7 +149,7 @@ def prune(dataset, min_cluster_size=5):
     return dataset.select([len(cluster) >= min_cluster_size for cluster in dataset.nodes])
 
 
-def default_sort(times, waveforms, sample_rate, sparse_fn):
+def default_sort(times, waveforms, sample_rate, sparse_fn=None):
     """Sort function with 'default' parameters"""
     spike_dataset = SpikeDataset(times=times, waveforms=waveforms, sample_rate=sample_rate)
 
@@ -155,7 +157,7 @@ def default_sort(times, waveforms, sample_rate, sparse_fn):
             dt=0.5 * 60.0,
             n_components=25,
             mode="kmeans",
-            transform=sparse_fn)
+            transform=None)
     denoised_clusters = prune(denoised_clusters, 5)
 
     clustered_clusters = cluster_step(denoised_clusters,
@@ -165,11 +167,12 @@ def default_sort(times, waveforms, sample_rate, sparse_fn):
     )
     clustered_clusters = prune(clustered_clusters, 2)
 
+    # could try this twice
     space_time = space_time_transform(
         clustered_clusters,
         transform=None,
         zscore=True,
-        waveform_features=5,
+        waveform_features=1,
         time_features=True,
         perplexity=30.0,
     )
