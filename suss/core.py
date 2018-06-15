@@ -267,6 +267,29 @@ class ClusterDataset(BaseDataset):
             labels=np.concatenate([self.labels, new_labels])
         )
 
+    def uncluster_node(self, node=None, idx=None, label=None):
+        if np.sum([node is not None, idx is not None, label is not None]) != 1:
+            raise ValueError("Only one of {node, idx, label} can be provided")
+        if label is not None:
+            match = np.where(self.labels == label)[0]
+        elif node is not None:
+            match = np.where(self.nodes == node)[0]
+        elif idx is not None:
+            match = [idx]
+
+        if len(match) > 1:
+            raise ValueError("More than one node matched label {}".format(label))
+        elif len(match) == 0:
+            raise ValueError("No node matched label {}".format(label))
+        else:
+            idx = match[0]
+
+        node = self.nodes[idx]
+        new_dataset = self.delete_node(idx=idx)
+        new_dataset = new_dataset.add_nodes(*node.nodes)
+
+        return new_dataset
+
     def split_node(
             self,
             t_start,

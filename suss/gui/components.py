@@ -539,12 +539,13 @@ class ClusterPane(widgets.QFrame):
 class ClusterSelector(widgets.QScrollArea):
     """For viewing cluster data and hooks when clusters are selected
     """
-    def __init__(self, dataset, colors, cb, ondelete=None, parent=None):
+    def __init__(self, dataset, colors, cb, ondelete=None, onsplit=None, parent=None):
         super().__init__(parent)
         self.dataset = dataset
         self.colors = colors
         self.cb = cb
         self.delete = ondelete
+        self.split = onsplit
 
         self.setup_data()
 
@@ -559,8 +560,27 @@ class ClusterSelector(widgets.QScrollArea):
             label = self.dataset.labels[label_idx]
             cluster = self.dataset.nodes[label_idx]
             cluster_layout = widgets.QHBoxLayout()
-            buttons_layout = widgets.QHBoxLayout()
 
+            options_layout = widgets.QVBoxLayout()
+
+            if cluster.is_waveform:
+                qlabel = widgets.QLabel(
+                    "{} (n={})".format(
+                        label,
+                        cluster.waveform_count,
+                    )
+                )
+            else:
+                qlabel = widgets.QLabel(
+                    "{} (n={}) ({} subclusters)".format(
+                        label,
+                        cluster.waveform_count,
+                        len(cluster.nodes)
+                    )
+                )
+            options_layout.addWidget(qlabel)
+
+            buttons_layout = widgets.QHBoxLayout()
             button = widgets.QPushButton("{} (n={})".format(label, cluster.waveform_count))
             button.setCheckable(True)
             button.setDefault(False)
@@ -581,7 +601,11 @@ class ClusterSelector(widgets.QScrollArea):
 
             buttons_layout.addWidget(button)
 
-            delete_button = widgets.QPushButton("X".format(label, cluster.waveform_count))
+            split_button = widgets.QPushButton("split")
+            split_button.clicked.connect(partial(self.split, label=label))
+            buttons_layout.addWidget(split_button)
+
+            delete_button = widgets.QPushButton("X")
             delete_button.clicked.connect(partial(self.delete, label=label))
             color = "red"
             delete_button.setStyleSheet("""
@@ -592,7 +616,9 @@ class ClusterSelector(widgets.QScrollArea):
             """.format(color))
             buttons_layout.addWidget(delete_button)
 
-            cluster_layout.addLayout(buttons_layout)
+            options_layout.addLayout(buttons_layout)
+
+            cluster_layout.addLayout(options_layout)
             cluster_layout.addWidget(ClusterPane(cluster, self.colors.get(label)))
             all_cluster_layout.addLayout(cluster_layout)
             
