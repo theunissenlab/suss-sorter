@@ -236,6 +236,13 @@ def sexy_sort(times, waveforms, sample_rate, sparse_fn=None):
     return result
 
 
+def denoising_sort(times, waveforms, sample_rate):
+    spike_dataset = SpikeDataset(times=times, waveforms=waveforms, sample_rate=sample_rate)
+
+    original_waveforms = spike_dataset.waveforms.copy()
+
+
+
 def sort(
         times,
         waveforms,
