@@ -45,9 +45,9 @@ def draw_on(ax_or_fig):
 
 def write(ax_or_fig, x, y, text, **kwargs):
     _ax = draw_on(ax_or_fig)
-    _ax.text(x, y, text, **kwargs)
+    text = _ax.text(x, y, text, **kwargs)
 
-    return _ax
+    return text, _ax
 
 
 def waveforms(
@@ -288,3 +288,68 @@ def time_vs_1d(
         axes.append(ax)
 
     return fig, axes
+
+
+def rotating_visualization(
+            dataset,
+            fig=None,
+            figsize=(5, 2),
+            save_gif: "save animation as a gif" = False,
+            save_gif_filename=None,
+            save_gif_dpi=100
+        ):
+    fig = fig if fig is not None else plt.figure(figsize=figsize)
+    ax = fig.add_axes([0, 0.1, 1, 0.9])
+
+    pca = PCA(n_components=2)
+    data2d = pca.fit_transform(dataset.waveforms)
+
+    scat = ax.scatter(
+            dataset.times,
+            data2d.T[0],
+            alpha=0.8,
+            color="Black",
+            s=[node.waveform_count / 10 for node in dataset.nodes]
+    )
+
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+    ax.spines['left'].set_visible(False)
+    ax.set_xlabel("t (s)")
+
+    text, _ = write(ax, 0.05, 0.9, "", fontsize=14)
+
+    total_frames = 300
+
+    def draw(frame):
+        t = (2 * np.pi) * frame / total_frames
+        scat.set_offsets(
+            np.hstack([
+                dataset.times[:, None],
+                np.sin(t) * data2d[:, 1:2] + np.cos(t) * data2d[:, 0:1]
+            ])
+        )
+        text.set_text("PC1, PC2")
+
+        return scat,
+
+    anim = animation.FuncAnimation(
+            fig,
+            draw,
+            frames=total_frames,
+            interval=20.0
+    )
+
+    if save_gif:
+        if not save_gif_filename:
+            print(
+                    "Not saving gif because save_gif_filename not specified. "
+                    "Save using anim.save(filename, dpi=dpi, writer='imagemagick')"
+            )
+        anim.save(save_gif_filename, dpi=save_gif_dpi, writer="imagemagick")
+        print("Saved gif at {}".format(save_gif_filename))
+
+    plt.close(fig)
+
+    return anim
+    

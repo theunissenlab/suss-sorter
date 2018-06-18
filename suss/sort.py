@@ -244,6 +244,9 @@ def denoise_step(dataset, dt, n_components, mode):
         mode=mode
     )
 
+    mask = [len(node) >= 2 for node in denoised_node.nodes]
+    denoised_node = denoised_node.select(mask)
+
     flat = denoised_node.flatten(assign_labels=True)
     centroids = dict(
         (
@@ -252,8 +255,9 @@ def denoise_step(dataset, dt, n_components, mode):
         )
         for label in np.unique(flat.labels)
     )
-    dataset.waveforms[:] = [centroids[label] for label in flat.labels]
-    return denoised_node
+    flat.source.waveforms[flat.ids] = [centroids[label] for label in flat.labels]
+
+    return mask, denoised_node
 
 
 def denoising_sort(times, waveforms, sample_rate):
@@ -263,17 +267,18 @@ def denoising_sort(times, waveforms, sample_rate):
 
     steps = [
         dict(dt=0.5 * 60.0, n_components=30, mode="kmeans"),
-        dict(dt=0.5 * 60.0, n_components=10, mode="kmeans"),
-        dict(dt=1.0 * 60.0, n_components=10, mode="gmm"),
-        dict(dt=1.0 * 60.0, n_components=8, mode="gmm"),
+        dict(dt=0.5 * 60.0, n_components=12, mode="kmeans"),
+        dict(dt=1.0 * 60.0, n_components=12, mode="gmm"),
+        dict(dt=1.0 * 60.0, n_components=12, mode="gmm"),
     ]
 
+    dataset = spike_dataset
     for step_kwargs in steps:
-        denoised_node = denoise_step(spike_dataset, **step_kwargs)
+        mask, denoised_node = denoise_step(dataset, **step_kwargs)
 
     flat = denoised_node.flatten(assign_labels=True)
     spike_dataset.waveforms[:] = original_waveforms
-    return spike_dataset.cluster(flat.labels)
+    return dataset.select(flat.ids).cluster(flat.labels)
 
 
 def sort(
