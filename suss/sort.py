@@ -236,11 +236,44 @@ def sexy_sort(times, waveforms, sample_rate, sparse_fn=None):
     return result
 
 
+def denoise_step(dataset, dt, n_components, mode):
+    denoised_node = cluster_step(
+        dataset,
+        dt=dt,
+        n_components=n_components,
+        mode=mode
+    )
+
+    flat = denoised_node.flatten(assign_labels=True)
+    centroids = dict(
+        (
+            label,
+            np.median(flat.waveforms[flat.labels == label], axis=0)
+        )
+        for label in np.unique(flat.labels)
+    )
+    dataset.waveforms[:] = [centroids[label] for label in flat.labels]
+    return denoised_node
+
+
 def denoising_sort(times, waveforms, sample_rate):
     spike_dataset = SpikeDataset(times=times, waveforms=waveforms, sample_rate=sample_rate)
 
     original_waveforms = spike_dataset.waveforms.copy()
 
+    steps = [
+        dict(dt=0.5 * 60.0, n_components=30, mode="kmeans"),
+        dict(dt=0.5 * 60.0, n_components=10, mode="kmeans"),
+        dict(dt=1.0 * 60.0, n_components=10, mode="gmm"),
+        dict(dt=1.0 * 60.0, n_components=8, mode="gmm"),
+    ]
+
+    for step_kwargs in steps:
+        denoised_node = denoise_step(spike_dataset, **step_kwargs)
+
+    flat = denoised_node.flatten(assign_labels=True)
+    spike_dataset.waveforms[:] = original_waveforms
+    return spike_dataset.cluster(flat.labels)
 
 
 def sort(
