@@ -293,10 +293,13 @@ def time_vs_1d(
 def rotating_visualization(
             dataset,
             fig=None,
+            ymax=None,
             figsize=(5, 2),
             save_gif: "save animation as a gif" = False,
             save_gif_filename=None,
-            save_gif_dpi=100
+            frames=100,
+            interval=60.0,
+            save_gif_dpi=80
         ):
     fig = fig if fig is not None else plt.figure(figsize=figsize)
     ax = fig.add_axes([0, 0.1, 1, 0.9])
@@ -312,6 +315,11 @@ def rotating_visualization(
             s=[node.waveform_count / 10 for node in dataset.nodes]
     )
 
+    if ymax is None:
+        _ymin, _ymax = ax.get_ylim()
+        ymax = max(abs(_ymin), abs(_ymax))
+
+    ax.set_ylim(-ymax, ymax)
     ax.spines['right'].set_visible(False)
     ax.spines['top'].set_visible(False)
     ax.spines['left'].set_visible(False)
@@ -319,7 +327,7 @@ def rotating_visualization(
 
     text, _ = write(ax, 0.05, 0.9, "", fontsize=14)
 
-    total_frames = 300
+    total_frames = frames
 
     def draw(frame):
         t = (2 * np.pi) * frame / total_frames
@@ -337,7 +345,7 @@ def rotating_visualization(
             fig,
             draw,
             frames=total_frames,
-            interval=20.0
+            interval=interval
     )
 
     if save_gif:
