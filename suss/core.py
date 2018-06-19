@@ -126,11 +126,24 @@ class BaseDataset(object):
     def complement(self, node):
         return self.select(np.delete(self.ids, node.ids))
 
-    def windows(self, dt):
-        for t_start in np.arange(0.0, np.max(self.times), dt):
-            t_stop = t_start + dt
-            selector = np.where((self.times >= t_start) & (self.times < t_stop))[0]
-            yield t_start, t_stop, self.select(selector)
+    def windows(self, dt=None, dpoints=None):
+        print("dt", dt)
+        print("dpoints", dpoints)
+        if dpoints is not None and dt is None:
+            idxs = np.arange(0, len(self.times), dpoints)
+            for start_idx in idxs:
+                stop_idx = start_idx + dpoints
+                selector = np.arange(start_idx, min(stop_idx, len(self.times)))
+                yield start_idx / self.source.sample_rate, stop_idx / self.source.sample_rate, self.select(selector)
+        elif dt is not None and dpoints is None:
+            times = np.arange(0.0, np.max(self.times), dt)
+            for t_start in times:
+                t_stop = t_start + dt
+                selector = np.where((self.times >= t_start) & (self.times < t_stop))[0]
+                yield t_start, t_stop, self.select(selector)
+        else:
+            raise Exception("Either points or dt must be provided")
+
 
     def flatten(self, depth=None, assign_labels=True):
         if self.is_waveform or (depth is not None and depth == 0):

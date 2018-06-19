@@ -4,7 +4,7 @@ import hdbscan
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy.stats
-from sklearn.cluster import KMeans
+from sklearn.cluster import KMeans, SpectralClustering
 from sklearn.decomposition import PCA
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
 from sklearn.mixture import BayesianGaussianMixture
@@ -35,8 +35,8 @@ def cluster(dataset, n_components=2, mode= "kmeans", transform=None):
         A list of core.SubDataset objects whose data represents the result
         of clustering
     """
-    if mode not in ("kmeans", "gmm", "tsne-dbscan"):
-        raise ValueError("mode must be either 'kmeans' or 'gmm' or 'tsne-dbscan'")
+    if mode not in ("kmeans", "gmm", "spectral"):
+        raise ValueError("mode must be either 'kmeans' or 'gmm' or 'spectral'")
 
     n_components = min(n_components, len(dataset.waveforms))
 
@@ -61,11 +61,14 @@ def cluster(dataset, n_components=2, mode= "kmeans", transform=None):
         clusterer = BayesianGaussianMixture(n_components=n_components)
         clusterer.fit(data)
         labels = clusterer.predict(data)
+    elif mode == "spectral":
+        clusterer = SpectralClustering(n_clusters=n_components)
+        labels = clusterer.fit_predict(data)
     
     return dataset.cluster(labels).nodes
 
 
-def cluster_step(dataset, dt, n_components=2, mode="kmeans", transform=None):
+def cluster_step(dataset, dt=None, dpoints=None, n_components=2, mode="kmeans", transform=None):
     """Implement a first step of the hierarchical clustering algorithm
 
     From a single core.ClusterDataset or core.SpikeDataset, apply clustering over
@@ -87,7 +90,7 @@ def cluster_step(dataset, dt, n_components=2, mode="kmeans", transform=None):
     """
     _denoised_nodes = []
     _fn_start = time.time()
-    for t_start, _, window in dataset.windows(dt=dt):
+    for t_start, _, window in dataset.windows(dt=dt, dpoints=dpoints):
         print("Clustering t={:.2f}.min. {:.1f}s elapsed.".format(
             t_start / 60.0, time.time() - _fn_start), end="\r")
         _denoised_nodes.append(
@@ -236,15 +239,16 @@ def sexy_sort(times, waveforms, sample_rate, sparse_fn=None):
     return result
 
 
-def denoise_step(dataset, dt, n_components, mode):
+def denoise_step(dataset, current_node, min_waveforms, dt=None, dpoints=None, n_components=None, mode=None):
     denoised_node = cluster_step(
-        dataset,
+        current_node.flatten(),
         dt=dt,
+        dpoints=dpoints,
         n_components=n_components,
         mode=mode
     )
 
-    mask = [len(node) >= 2 for node in denoised_node.nodes]
+    mask = [node.waveform_count >= min_waveforms for node in denoised_node.nodes]
     denoised_node = denoised_node.select(mask)
 
     flat = denoised_node.flatten(assign_labels=True)
@@ -255,7 +259,9 @@ def denoise_step(dataset, dt, n_components, mode):
         )
         for label in np.unique(flat.labels)
     )
-    flat.source.waveforms[flat.ids] = [centroids[label] for label in flat.labels]
+
+    if len(flat.ids):
+        dataset.waveforms[flat.ids] = [centroids[label] for label in flat.labels]
 
     return mask, denoised_node
 
@@ -266,19 +272,28 @@ def denoising_sort(times, waveforms, sample_rate):
     original_waveforms = spike_dataset.waveforms.copy()
 
     steps = [
-        dict(dt=0.5 * 60.0, n_components=30, mode="kmeans"),
-        dict(dt=0.5 * 60.0, n_components=12, mode="kmeans"),
-        dict(dt=1.0 * 60.0, n_components=12, mode="gmm"),
-        dict(dt=1.0 * 60.0, n_components=12, mode="gmm"),
+        dict(min_waveforms=2, dt=0.5 * 60.0, n_components=32, mode="kmeans"),
+        dict(min_waveforms=15, dt=1.0 * 60.0, n_components=16, mode="kmeans"),
+        dict(min_waveforms=20, dt=1.0 * 60.0, n_components=10, mode="kmeans"),
+        dict(min_waveforms=20, dt=60.0 * 60.0, n_components=12, mode="spectral"),
+    ]
+    steps = [
+        dict(min_waveforms=2, dpoints=1000, n_components=32, mode="kmeans"),
+        dict(min_waveforms=15, dpoints=2000, n_components=16, mode="kmeans"),
+        dict(min_waveforms=20, dpoints=2000, n_components=10, mode="kmeans"),
+        # dict(min_waveforms=20, dt=60.0 * 60.0, n_components=12, mode="spectral"),
     ]
 
+
     dataset = spike_dataset
+    denoised_node = dataset
     for step_kwargs in steps:
-        mask, denoised_node = denoise_step(dataset, **step_kwargs)
+        mask, denoised_node = denoise_step(dataset, denoised_node, **step_kwargs)
 
     flat = denoised_node.flatten(assign_labels=True)
     spike_dataset.waveforms[:] = original_waveforms
-    return dataset.select(flat.ids).cluster(flat.labels)
+    return denoised_node
+    # return dataset.select(flat.ids).cluster(flat.labels)
 
 
 def sort(
