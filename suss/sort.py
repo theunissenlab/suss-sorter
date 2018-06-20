@@ -7,7 +7,9 @@ import scipy.stats
 from sklearn.cluster import KMeans, SpectralClustering
 from sklearn.decomposition import PCA
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
+from sklearn.manifold import TSNE
 from sklearn.mixture import BayesianGaussianMixture
+from sklearn.neighbors import KNeighborsClassifier
 
 try:
     from MulticoreTSNE import MulticoreTSNE as TSNE
@@ -230,7 +232,8 @@ def sexy_sort(times, waveforms, sample_rate, sparse_fn=None):
     if len(tsned):
         hdb = hdbscan.HDBSCAN(min_cluster_size=2)
         labels = hdb.fit_predict(tsned)
-        labels = reassign_unassigned(clustered_clusters.waveforms, labels)
+        if -1 in np.unique(labels):
+            labels = reassign_unassigned(clustered_clusters.waveforms, labels)
     else:
         labels = []
 
@@ -297,6 +300,39 @@ def denoising_sort(times, waveforms, sample_rate):
     # flat = denoised_node.flatten(assign_labels=True)
     return denoised_node
     # return dataset.select(flat.ids).cluster(flat.labels)
+
+
+def sort_v3(times, waveforms, sample_rate):
+    denoised = denoising_sort(times, waveforms, sample_rate)
+
+    tsne = TSNE(n_components=2, perplexity=10)
+    manifold = tsne.fit_transform(denoised.waveforms)
+
+    labels = np.zeros(len(denoised.nodes))
+    n_labels_per_window = 12
+
+    spectral = SpectralClustering(n_clusters=n_labels_per_window)
+    spectral = hdbscan.HDBSCAN(min_cluster_size=3)
+
+    for window_idx, (t_start, t_stop, window) in enumerate(denoised.windows(dt=2 * 60.0 * 60.0)):
+        selector = np.where(
+            (denoised.times >= t_start) &
+            (denoised.times < t_stop)
+        )[0]
+        wf_features = scipy.stats.zscore(manifold[selector], axis=0)
+        time_features = window.times[:, None] / np.max(denoised.times)
+
+        stacked = np.hstack([wf_features, time_features])
+
+        new_labels = spectral.fit_predict(
+                stacked
+        )
+        if -1 in np.unique(new_labels):
+            new_labels = reassign_unassigned(stacked, new_labels)
+
+        labels[selector] = new_labels + np.max(labels) + 1
+
+    return denoised.cluster(labels)
 
 
 def sort(
