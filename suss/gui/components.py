@@ -628,7 +628,7 @@ class ClusterSelector(widgets.QScrollArea):
         cluster_frame.setLayout(all_cluster_layout)
         self.setWidget(cluster_frame)
         self.setWidgetResizable(True)
-        self.setFixedWidth(380)
+        self.setFixedWidth(550)
 
         # layout = widgets.QVBoxLayout()
         # layout.addWidget(cluster_frame)
