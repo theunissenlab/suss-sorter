@@ -448,7 +448,7 @@ class TimeseriesPane(widgets.QFrame):
             ax.clear()
         clear_axes(*self.axes[:-1])
 
-        self.flattened = self.dataset.flatten(1) #.flatten(assign_labels=True)
+        self.flattened = self.dataset.flatten()
         self.scatters = defaultdict(list)
 
         if not len(self.dataset.nodes):
@@ -542,13 +542,12 @@ class ClusterPane(widgets.QFrame):
 class ClusterSelector(widgets.QScrollArea):
     """For viewing cluster data and hooks when clusters are selected
     """
-    def __init__(self, dataset, colors, cb, ondelete=None, onsplit=None, parent=None):
+    def __init__(self, dataset, colors, cb, ondelete=None, parent=None):
         super().__init__(parent)
         self.dataset = dataset
         self.colors = colors
         self.cb = cb
         self.delete = ondelete
-        self.split = onsplit
 
         self.setup_data()
 
@@ -603,10 +602,6 @@ class ClusterSelector(widgets.QScrollArea):
             self.buttons[label] = button
 
             buttons_layout.addWidget(button)
-
-            split_button = widgets.QPushButton("split")
-            split_button.clicked.connect(partial(self.split, label=label))
-            buttons_layout.addWidget(split_button)
 
             delete_button = widgets.QPushButton("X")
             delete_button.clicked.connect(partial(self.delete, label=label))

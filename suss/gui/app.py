@@ -138,8 +138,8 @@ class SussViewer(widgets.QFrame):
                 self.dataset,
                 color_dict,
                 self.toggle,
-                ondelete=self.delete,
-                onsplit=self.split)
+                ondelete=self.delete
+        )
         self.actions_panel = ClusterManipulationOptions(
             reset_cb=self.reset,
             clear_cb=self.clear,
@@ -200,16 +200,6 @@ class SussViewer(widgets.QFrame):
         if label in self.active_clusters:
             self.active_clusters.remove(label)
         self.dataset = self.dataset.delete_node(label=label)
-        self.dataset_updated()
-
-    def split(self, label):
-        if label in self.active_clusters:
-            self.active_clusters.remove(label)
-        old_labels = set(self.dataset.labels)
-        self.dataset = self.dataset.uncluster_node(label=label)
-        new_labels = set(self.dataset.labels)
-        for label in new_labels - old_labels:
-            self.active_clusters.add(label)
         self.dataset_updated()
 
     def toggle(self, selected, label=None):
