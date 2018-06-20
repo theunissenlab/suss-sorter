@@ -131,7 +131,7 @@ class SussViewer(widgets.QFrame):
         color_dict = get_color_dict(self.dataset.labels)
         self.projections = ProjectionsPane(self.dataset, color_dict, size=(300, 350), facecolor="#666666")
         self.overview = OverviewScatterPane(self.dataset, color_dict, size=(100, 100), facecolor="#444444")
-        self.timeseries = TimeseriesPane(self.dataset, color_dict, size=(700, 100), facecolor="#888888")
+        self.timeseries = TimeseriesPane(self.dataset, color_dict, n_components=3, size=(700, 100), facecolor="#888888")
         self.waveforms = WaveformsPane(self.dataset, color_dict, size=(300, 250), facecolor="#444444")
         self.isi = ISIPane(self.dataset, color_dict, size=(200, 100), facecolor="#444444")
         self.cluster_selector = ClusterSelector(

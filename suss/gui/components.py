@@ -448,7 +448,7 @@ class TimeseriesPane(widgets.QFrame):
             ax.clear()
         clear_axes(*self.axes[:-1])
 
-        self.flattened = self.dataset.flatten(assign_labels=True)
+        self.flattened = self.dataset.flatten(1) #.flatten(assign_labels=True)
         self.scatters = defaultdict(list)
 
         if not len(self.dataset.nodes):
@@ -457,24 +457,27 @@ class TimeseriesPane(widgets.QFrame):
             self.data = PCA(n_components=self.n_components).fit_transform(
                 self.flattened.waveforms, self.flattened.labels)
         else:
-            self.data = LDA(n_components=self.n_components).fit_transform(
+            # TODO: is LDA or PCA better.
+            # self.data = LDA(n_components=self.n_components).fit_transform(
+            #     self.flattened.waveforms, self.flattened.labels)
+            self.data = PCA(n_components=self.n_components).fit_transform(
                 self.flattened.waveforms, self.flattened.labels)
 
         for component, ax in enumerate(self.axes):
             ax.scatter(
-                self.flattened.times[::self.frac],
-                self.data[::self.frac, component],
-                s=2,
-                alpha=0.1,
+                self.flattened.times[::],
+                self.data[::, component],
+                s=5,
+                alpha=0.4,
                 color=self.inactive_color
             )
         for label in self.dataset.labels:
             for component, ax in enumerate(self.axes):
                 self.scatters[label].append(ax.scatter(
-                    self.flattened.times[self.flattened.labels == label][::self.frac],
-                    self.data[self.flattened.labels == label][::self.frac, component],
-                    s=2,
-                    alpha=0.4,
+                    self.flattened.times[self.flattened.labels == label][::],
+                    self.data[self.flattened.labels == label][::, component],
+                    s=[node.waveform_count / 20 for node in self.flattened.nodes],
+                    alpha=0.5,
                     color=self.colors[label]))
                 self.scatters[label][-1].set_visible(False)
 
