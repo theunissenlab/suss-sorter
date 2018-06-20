@@ -476,7 +476,7 @@ class TimeseriesPane(widgets.QFrame):
                 self.scatters[label].append(ax.scatter(
                     self.flattened.times[self.flattened.labels == label][::],
                     self.data[self.flattened.labels == label][::, component],
-                    s=[node.waveform_count / 20 for node in self.flattened.nodes],
+                    s=2, #[node.waveform_count / 20 for node in self.flattened.nodes],
                     alpha=0.5,
                     color=self.colors[label]))
                 self.scatters[label][-1].set_visible(False)
