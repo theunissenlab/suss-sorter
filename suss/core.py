@@ -258,9 +258,14 @@ class ClusterDataset(BaseDataset):
         return self.select(np.logical_not(selector), child=False)
 
     def add_nodes(self, *nodes):
+        if not len(self.labels):
+            start_at = 0
+        else:
+            start_at = np.max(self.labels)
+            
         new_labels = np.arange(
-                np.max(self.labels) + 1,
-                np.max(self.labels) + len(nodes) + 1
+                start_at + 1,
+                start_at + len(nodes) + 1
         )
         return ClusterDataset(
             np.concatenate([self.nodes, nodes]),
