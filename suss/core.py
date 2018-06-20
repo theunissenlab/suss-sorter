@@ -128,10 +128,10 @@ class BaseDataset(object):
 
     def windows(self, dt=None, dpoints=None):
         if dpoints is not None and dt is None:
-            idxs = np.arange(0, len(self.times), dpoints)
+            idxs = np.arange(0, len(self.times), dpoints).astype(np.int)
             for start_idx in idxs:
-                stop_idx = start_idx + dpoints
-                selector = np.arange(start_idx, min(stop_idx, len(self.times)))
+                stop_idx = min(start_idx + dpoints, len(self.times))
+                selector = np.arange(start_idx, stop_idx)
                 yield start_idx, stop_idx, self.select(selector)
         elif dt is not None and dpoints is None:
             times = np.arange(0.0, np.max(self.times), dt)
