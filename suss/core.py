@@ -127,14 +127,12 @@ class BaseDataset(object):
         return self.select(np.delete(self.ids, node.ids))
 
     def windows(self, dt=None, dpoints=None):
-        print("dt", dt)
-        print("dpoints", dpoints)
         if dpoints is not None and dt is None:
             idxs = np.arange(0, len(self.times), dpoints)
             for start_idx in idxs:
                 stop_idx = start_idx + dpoints
                 selector = np.arange(start_idx, min(stop_idx, len(self.times)))
-                yield start_idx / self.source.sample_rate, stop_idx / self.source.sample_rate, self.select(selector)
+                yield start_idx, stop_idx, self.select(selector)
         elif dt is not None and dpoints is None:
             times = np.arange(0.0, np.max(self.times), dt)
             for t_start in times:

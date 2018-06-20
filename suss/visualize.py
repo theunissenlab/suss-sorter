@@ -294,7 +294,9 @@ def rotating_visualization(
             dataset,
             fig=None,
             ymax=None,
+            labels=None,
             figsize=(5, 2),
+            pcs=2,
             save_gif: "save animation as a gif" = False,
             save_gif_filename=None,
             frames=100,
@@ -304,25 +306,36 @@ def rotating_visualization(
     fig = fig if fig is not None else plt.figure(figsize=figsize)
     ax = fig.add_axes([0, 0.1, 1, 0.9])
 
-    pca = PCA(n_components=2)
+    pca = PCA(n_components=pcs)
     data2d = pca.fit_transform(dataset.waveforms)
 
-    scat = ax.scatter(
-            dataset.times,
-            data2d.T[0],
-            alpha=0.8,
-            color="Black",
-            s=[node.waveform_count / 10 for node in dataset.nodes]
-    )
+    if labels is None:
+        scat = ax.scatter(
+                dataset.times,
+                data2d.T[0],
+                alpha=0.6,
+                color="Black",
+                s=[node.waveform_count / 10 for node in dataset.nodes]
+        )
+    else:
+        scatters = {}
+        for label in np.unique(labels):
+            scatters[label] = ax.scatter(
+                dataset.times[labels == label],
+                data2d[labels == label].T[0],
+                alpha=0.6,
+                s=[node.waveform_count / 5 for node in dataset.nodes]
+            )
+
 
     if ymax is None:
         _ymin, _ymax = ax.get_ylim()
         ymax = max(abs(_ymin), abs(_ymax))
 
     ax.set_ylim(-ymax, ymax)
-    ax.spines['right'].set_visible(False)
-    ax.spines['top'].set_visible(False)
-    ax.spines['left'].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.spines["top"].set_visible(False)
+    ax.spines["left"].set_visible(False)
     ax.set_xlabel("t (s)")
 
     text, _ = write(ax, 0.05, 0.9, "", fontsize=14)
@@ -330,21 +343,37 @@ def rotating_visualization(
     total_frames = frames
 
     def draw(frame):
-        t = (2 * np.pi) * frame / total_frames
-        scat.set_offsets(
-            np.hstack([
-                dataset.times[:, None],
-                np.sin(t) * data2d[:, 1:2] + np.cos(t) * data2d[:, 0:1]
-            ])
-        )
+        from_pc = frame // total_frames
+        to_pc = (from_pc + 1) % pcs
+
+        if pcs == 2:
+            t = 2 * np.pi * (frame % total_frames) / total_frames
+        else:
+            t = 0.5 * np.pi * (frame % total_frames) / total_frames
         text.set_text("PC1, PC2")
 
-        return scat,
+        if labels is None:
+            scat.set_offsets(
+                np.hstack([
+                    dataset.times[:, None],
+                    np.sin(t) * data2d[:, to_pc:to_pc + 1] + np.cos(t) * data2d[:, from_pc:from_pc + 1]
+                ])
+            )
+            return scat,
+        else:
+            for label, collection in scatters.items():
+                collection.set_offsets(
+                    np.hstack([
+                        dataset.times[labels == label, None],
+                        np.sin(t) * data2d[labels == label, to_pc:to_pc + 1] + np.cos(t) * data2d[labels == label, from_pc:from_pc + 1]
+                    ])
+                )
+            return scatters.values()
 
     anim = animation.FuncAnimation(
             fig,
             draw,
-            frames=total_frames,
+            frames=total_frames * pcs if pcs > 2 else total_frames,
             interval=interval
     )
 

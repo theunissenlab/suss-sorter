@@ -281,17 +281,20 @@ def denoising_sort(times, waveforms, sample_rate):
         dict(min_waveforms=2, dpoints=1000, n_components=32, mode="kmeans"),
         dict(min_waveforms=15, dpoints=2000, n_components=16, mode="kmeans"),
         dict(min_waveforms=20, dpoints=2000, n_components=10, mode="kmeans"),
-        # dict(min_waveforms=20, dt=60.0 * 60.0, n_components=12, mode="spectral"),
     ]
 
 
     dataset = spike_dataset
     denoised_node = dataset
-    for step_kwargs in steps:
-        mask, denoised_node = denoise_step(dataset, denoised_node, **step_kwargs)
+    try:
+        for step_kwargs in steps:
+            mask, denoised_node = denoise_step(dataset, denoised_node, **step_kwargs)
+    except:
+        raise
+    finally:
+        spike_dataset.waveforms[:] = original_waveforms
 
-    flat = denoised_node.flatten(assign_labels=True)
-    spike_dataset.waveforms[:] = original_waveforms
+    # flat = denoised_node.flatten(assign_labels=True)
     return denoised_node
     # return dataset.select(flat.ids).cluster(flat.labels)
 
