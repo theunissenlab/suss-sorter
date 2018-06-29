@@ -81,13 +81,14 @@ class TimeseriesPlot(widgets.QFrame):
 
         self._frame = 0
         self.timer = QTimer()
-        self.timer.start(1.0)
+        # TODO (kevin): make the speed variable
+        self.timer.start(4.0)
         self.timer.timeout.connect(self.rotate)
 
     def rotate(self):
-        __t = (2 * np.pi) * (self._frame % 200) / 200
+        # TODO (kevin): make the speed variable
+        _t = (2 * np.pi) * (self._frame % 500) / 500
         for dim in range(2):
-            _t = __t if dim == 0 else __t * 2
             self.main_scatters[dim].set_offsets(
                 np.array([
                     self.dataset.flatten(1).times,
@@ -95,9 +96,8 @@ class TimeseriesPlot(widgets.QFrame):
                 ]).T
             )
         for label, node in zip(self.dataset.labels, self.dataset.nodes):
-            pcs = self.pca.transform(node.waveforms)
+            pcs = self.pcs[self.flattened.labels == label]
             for dim in range(2):
-                _t = __t if dim == 0 else __t * 2
                 self.scatters[label][dim].set_offsets(
                     np.array([
                         node.times,
@@ -112,11 +112,13 @@ class TimeseriesPlot(widgets.QFrame):
             self.canvas.draw_idle()
             return
 
+        self.flattened = self.dataset.flatten(1)
+
         self.pca = PCA(n_components=3).fit(self.dataset.flatten().waveforms)
-        self.pcs = self.pca.transform(self.dataset.flatten(1).waveforms)
+        self.pcs = self.pca.transform(self.flattened.waveforms)
 
         self.main_scatters.append(self.ax1.scatter(
-            self.dataset.flatten(1).times,
+            self.flattened.times,
             self.pcs.T[0],
             s=5,
             alpha=0.8,
@@ -124,16 +126,19 @@ class TimeseriesPlot(widgets.QFrame):
             rasterized=True
         ))
         self.main_scatters.append(self.ax2.scatter(
-            self.dataset.flatten(1).times,
+            self.flattened.times,
             self.pcs.T[1],
             s=5,
             alpha=0.8,
             color="Gray",
             rasterized=True
         ))
+        ylim = max(*self.ax1.get_ylim())
+        self.ax1.set_ylim(-ylim, ylim)
+        self.ax2.set_ylim(-ylim, ylim)
 
         for label, node in zip(self.dataset.labels, self.dataset.nodes):
-            pcs = self.pca.transform(node.waveforms)
+            pcs = self.pcs[self.flattened.labels == label]
             for dim in range(2):
                 self.scatters[label].append(
                     self.axes[dim].scatter(
