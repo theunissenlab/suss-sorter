@@ -150,7 +150,7 @@ class ClusterSelector(widgets.QScrollArea):
         self.frame.setLayout(self.layout)
         self.setWidget(self.frame)
         self.setWidgetResizable(True)
-        self.setFixedWidth(400)
+        self.setFixedWidth(420)
 
 
 class ClusterInfo(widgets.QWidget):

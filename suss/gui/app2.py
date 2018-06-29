@@ -16,6 +16,7 @@ from suss.core import ClusterDataset
 
 from suss.gui.cluster_select import ClusterSelector
 from suss.gui.timeseries import TimeseriesPlot
+from suss.gui.waveforms import WaveformsPlot
 from suss.gui.utils import make_color_map
 
 
@@ -282,6 +283,7 @@ class SussViewer(widgets.QFrame):
         # self.progress.setGeometry(200, 80, 250, 20)
 
         layout.addWidget(ClusterSelector(parent=self), 1, 0, 3, 1)
+        layout.addWidget(WaveformsPlot(parent=self), 2, 1, 1, 1)
         layout.addWidget(TimeseriesPlot(parent=self), 3, 1, 1, 2)
 
         self.progress.setValue(len(self.dataset.nodes))

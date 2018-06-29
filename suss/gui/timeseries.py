@@ -63,16 +63,16 @@ class TimeseriesPlot(widgets.QFrame):
 
         self.ax1 = fig.add_axes(
                 [0, 0.1, 1, 0.44],
-                facecolor="#000000")
+                facecolor="#111111")
         self.ax1.set_yticks([])
-        self.ax1.patch.set_alpha(1.0)
+        self.ax1.patch.set_alpha(0.8)
 
         self.ax2 = fig.add_axes(
                 [0, 0.55, 1, 0.44],
-                facecolor="#000000")
+                facecolor="#111111")
         self.ax2.set_yticks([])
         self.ax2.set_xticks([])
-        self.ax2.patch.set_alpha(1.0)
+        self.ax2.patch.set_alpha(0.8)
 
         self.axes = [self.ax1, self.ax2]
 
@@ -87,7 +87,10 @@ class TimeseriesPlot(widgets.QFrame):
 
     def rotate(self):
         # TODO (kevin): make the speed variable
-        _t = (2 * np.pi) * (self._frame % 500) / 500
+        if not len(self.dataset.nodes):
+            return
+
+        _t = (2 * np.pi) * (self._frame % 200) / 200
         for dim in range(2):
             self.main_scatters[dim].set_offsets(
                 np.array([
