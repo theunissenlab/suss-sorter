@@ -1,6 +1,7 @@
 import os
 import sys
 from functools import partial
+import time
 
 import numpy as np
 from PyQt5 import QtWidgets as widgets
@@ -11,7 +12,6 @@ from matplotlib.collections import LineCollection
 from matplotlib.figure import Figure
 
 from suss.gui.utils import make_color_map, clear_axes, get_changed_labels
-
 
 
 def create_check_button(text, color, cb):
@@ -49,6 +49,7 @@ class ClusterSelector(widgets.QScrollArea):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        # FIXME (kevin): need to cache bust colors!
         self._cached_cluster_info = {}
         self.setup_data()
         self.init_ui()
@@ -206,8 +207,7 @@ class ClusterInfo(widgets.QWidget):
                 mean - std,
                 mean + std,
                 color="Black",
-                alpha=0.25,
-                rasterized=True)
+                alpha=0.25)
         self.ax_wf.plot(
                 mean,
                 color=self.color,
@@ -231,13 +231,16 @@ class ClusterInfo(widgets.QWidget):
 
         isi = np.diff(cluster.times)
         isi_violations = np.sum(isi < 0.001) / len(isi)
+        hist, bin_edges = np.histogram(isi, bins=30, density=True, range=(0, 0.03))
+        self.ax_isi.bar(bin_edges[:-1] + 0.0005, hist, width=0.001, color="Black")
+        '''
         self.ax_isi.hist(
                 isi,
                 bins=50,
                 range=(0, 0.05),
                 density=True,
-                color="Black",
-                rasterized=True)
+                color="Black")
+        '''
         self.ax_isi.text(
                 self.ax_isi.get_xlim()[1] * 0.9,
                 self.ax_isi.get_ylim()[1] * 0.9,
@@ -251,15 +254,18 @@ class ClusterInfo(widgets.QWidget):
                 color="Red",
                 linestyle="--",
                 linewidth=0.5)
-        self.ax_isi.set_xlim(0, 0.05)
+        self.ax_isi.set_xlim(0, 0.03)
 
         peaks = np.min(cluster.waveforms, axis=1)
+        hist, bin_edges = np.histogram(peaks, bins=20, density=True, range=(-200, 0))
+        self.ax_skew.bar(bin_edges[:-1] + 5, hist, width=10, color="Black")
+        '''
         self.ax_skew.hist(peaks,
-                bins=100,
+                bins=20,
                 range=(-200, 0),
                 density=True,
-                color="Black",
-                rasterized=True)
+                color="Black")
+        '''
         self.ax_skew.vlines(
                 [-100, -50],
                 *self.ax_skew.get_ylim(),

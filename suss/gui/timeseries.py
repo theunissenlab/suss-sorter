@@ -142,6 +142,7 @@ class TimeseriesPlot(widgets.QFrame):
             rasterized=True
         ))
 
+        # FIXME (kevin): colors not getting updated after mass deletion
         for label, node in zip(self.dataset.labels, self.dataset.nodes):
             pcs = self.pcs[self.flattened.labels == label]
             for dim in range(2):
