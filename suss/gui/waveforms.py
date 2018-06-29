@@ -12,13 +12,14 @@ from matplotlib.collections import LineCollection
 from matplotlib.figure import Figure
 from sklearn.decomposition import PCA
 
-from suss.gui.utils import make_color_map, clear_axes
+from suss.gui.utils import make_color_map, clear_axes, get_changed_labels
 
 
 class WaveformsPlot(widgets.QFrame):
 
     def __init__(self, size=(700, 100), parent=None):
         super().__init__(parent)
+        self._cached_cluster_stats = {}
         self.size = size
 
         self.setup_plots()
@@ -31,8 +32,12 @@ class WaveformsPlot(widgets.QFrame):
                 self.update_selected
         )
 
-    def reset(self):
+    def reset(self, new_dataset, old_dataset):
+        for label in get_changed_labels(new_dataset, old_dataset):
+            if label in self._cached_cluster_stats:
+                del self._cached_cluster_stats[label]
         self.ax.clear()
+        self.canvas.draw_idle()
         self.setup_data()
 
     @property
@@ -69,8 +74,14 @@ class WaveformsPlot(widgets.QFrame):
         if selected is None:
             selected = set()
         for label in selected:
-            mean = np.mean(flattened.waveforms[flattened.labels == label], axis=0)
-            std = np.std(flattened.waveforms[flattened.labels == label], axis=0)
+            if label in self._cached_cluster_stats:
+                mean, std = self._cached_cluster_stats[label]
+            else:
+                node = self.dataset.nodes[self.dataset.labels == label][0]
+                mean = node.waveform
+                std = np.std(node.waveforms, axis=0)
+                self._cached_cluster_stats[label] = (mean, std)
+
             self.ax.fill_between(
                 np.arange(len(mean)),
                 mean - std,

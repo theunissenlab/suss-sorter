@@ -1,10 +1,11 @@
 import os
 import sys
+from contextlib import contextmanager
 from functools import partial
 
 import numpy as np
 from PyQt5 import QtWidgets as widgets
-from PyQt5.QtCore import Qt, QObject, pyqtSignal
+from PyQt5.QtCore import Qt, QObject, QTimer, pyqtSignal
 from PyQt5 import QtGui as gui
 from matplotlib import cm
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -17,7 +18,7 @@ from suss.core import ClusterDataset
 from suss.gui.cluster_select import ClusterSelector
 from suss.gui.timeseries import TimeseriesPlot
 from suss.gui.waveforms import WaveformsPlot
-from suss.gui.utils import make_color_map
+from suss.gui.utils import make_color_map, get_changed_labels
 
 
 class App(widgets.QMainWindow):
@@ -105,7 +106,7 @@ class App(widgets.QMainWindow):
         self.save_action.triggered.connect(self.run_file_saver)
         self.display_suss_viewer(dataset)
 
-    def save_dataset(self):
+    def save_dataset(self, filename):
         suss.io.save_pickle(filename, self.suss_viewer.dataset)
         widgets.QMessageBox.information(
                 self,
@@ -123,8 +124,7 @@ class Splash(widgets.QWidget):
         layout = widgets.QVBoxLayout(self)
         self.main_button = widgets.QPushButton("Load Dataset", self)
         self.quit_button = widgets.QPushButton("Quit", self)
-        self.main_button.setFixedSize(600, 200)
-        self.main_button.setStyleSheet("font: 30pt Comic Sans MS")
+        self.main_button.setFixedWidth(200)
         layout.addWidget(self.main_button)
         layout.addWidget(self.quit_button)
         self.setLayout(layout)
@@ -132,17 +132,27 @@ class Splash(widgets.QWidget):
 
 class SussViewer(widgets.QFrame):
 
-    dataset_changed = pyqtSignal(object)
+    # Emits the new dataset object and the old dataset object
+    dataset_changed = pyqtSignal(object, object)
     selected_changed = pyqtSignal(set)
 
     def __init__(self, dataset=None, parent=None):
         super().__init__(parent)
         self.stack = [("load", dataset)]
+        self.animation_timer = QTimer()
+        self.animation_timer.start(4.0)
+
         self.selected = set()
         self.init_ui()
         self.setup_shortcuts()
 
         self.dataset_changed.connect(self.on_dataset_changed)
+
+    @contextmanager
+    def timer_paused(self):
+        self.animation_timer.stop()
+        yield
+        self.animation_timer.start(4.0)
 
     def setup_shortcuts(self):
         self.undo_shortcut = widgets.QShortcut(
@@ -155,10 +165,20 @@ class SussViewer(widgets.QFrame):
         self.delete_shortcut.activated.connect(
             self.delete)
 
+        self.delete_unselected_shortcut = widgets.QShortcut(
+            gui.QKeySequence("Shift+Backspace"), self)
+        self.delete_unselected_shortcut.activated.connect(
+            self.delete_unselected)
+
         self.select_all_shortcut = widgets.QShortcut(
             gui.QKeySequence.SelectAll, self)
         self.select_all_shortcut.activated.connect(
             self.select_all)
+
+        self.clear_shortcut = widgets.QShortcut(
+            gui.QKeySequence("Ctrl+C"), self)
+        self.clear_shortcut.activated.connect(
+            self.clear)
 
         self.merge_shortcut = widgets.QShortcut(
             gui.QKeySequence("Ctrl+M"), self)
@@ -174,27 +194,44 @@ class SussViewer(widgets.QFrame):
         return self.stack[-1][0]
 
     def _enstack(self, action, dataset):
-        self.stack.append((action, dataset))
-        self.dataset_changed.emit(self.dataset) 
+        with self.timer_paused():
+            _old_dataset = self.dataset
+            self.stack.append((action, dataset))
+            self.dataset_changed.emit(
+                    self.dataset,
+                    _old_dataset,
+            )
 
     def _undo(self):
         if len(self.stack) == 1:
             print("Nothing left to undo.")
             return
-        if "delete" in self.last_action or "merge" in self.last_action:
-            self.selected = (
-                set(self.stack[-2][1].labels) - 
-                set(self.stack[-1][1].labels)
-            )
-        self.stack.pop()
-        self.colors = make_color_map(self.dataset.labels)
-        self.dataset_changed.emit(self.dataset) 
-        self.selected_changed.emit(self.selected)
+
+        with self.timer_paused():
+            _old_dataset = self.dataset
+
+            self.stack.pop()
+            _new_dataset = self.dataset
+
+            new_labels = set(self.dataset.labels)
+            changed_labels = get_changed_labels(self.dataset, _old_dataset)
+            self.selected = set.intersection(new_labels, changed_labels)
+            self.colors = make_color_map(self.dataset.labels)
+            self.dataset_changed.emit(
+                self.dataset,
+                _old_dataset
+            ) 
+            self.selected_changed.emit(self.selected)
 
     def reset(self):
-        self.stack = self.stack[:1]
-        self.dataset_changed.emit(self.dataset) 
-        self.dataset_updated()
+        with self.timer_paused():
+            _old_dataset = self.dataset
+            self.stack = self.stack[:1]
+            self.dataset_changed.emit(
+                self.dataset,
+                _old_dataset
+            )
+            self.dataset_updated()
 
     def select_all(self):
         if self.selected == set(self.dataset.labels):
@@ -214,15 +251,16 @@ class SussViewer(widgets.QFrame):
         old_labels = set(self.dataset.labels)
         _new_dataset = self.dataset.merge_nodes(labels=self.selected)
         new_labels = set(_new_dataset.labels)
+        changed_labels = get_changed_labels(_new_dataset, self.dataset)
 
-        self.selected = new_labels - old_labels
+        self.selected = set.intersection(new_labels, changed_labels)
         self.colors = make_color_map(_new_dataset.labels)
         self._enstack("merge", _new_dataset)
         self.selected_changed.emit(self.selected)
         # self.dataset_updated()
 
-    def delete(self):
-        if len(self.selected) == 0:
+    def _delete(self, to_delete):
+        if len(to_delete) == 0:
             widgets.QMessageBox.warning(
                     self,
                     "Delete failed",
@@ -230,14 +268,20 @@ class SussViewer(widgets.QFrame):
             return
 
         _new_dataset = self.dataset
-        for label in self.selected:
+        for label in to_delete:
             _new_dataset = _new_dataset.delete_node(label=label)
 
-        plural = "s" if len(self.selected) > 1 else ""
+        plural = "s" if len(to_delete) > 1 else ""
         self._enstack("delete node" + plural, _new_dataset)
+
+    def delete(self):
+        self._delete(self.selected)
         self.selected = set()
 
-        # self.dataset_updated()
+    def delete_unselected(self):
+        labels = set(self.dataset.labels)
+        to_delete = labels - self.selected
+        self._delete(to_delete)
 
     def save(self):
         self.parent().run_file_saver()
@@ -270,24 +314,9 @@ class SussViewer(widgets.QFrame):
         layout.setColumnStretch(1, 4)
         layout.setColumnStretch(2, 4)
 
-        # Generating plots for QProgressDialog is slow
-        # So do a progress bar
-
-        self.progress = widgets.QProgressDialog(
-                "Loading {} clusters".format(len(self.dataset.nodes)),
-                "Cancel",
-                0,
-                len(self.dataset.nodes),
-                self)
-        self.progress.open()
-        # self.progress.setGeometry(200, 80, 250, 20)
-
         layout.addWidget(ClusterSelector(parent=self), 1, 0, 3, 1)
         layout.addWidget(WaveformsPlot(parent=self), 2, 1, 1, 1)
         layout.addWidget(TimeseriesPlot(parent=self), 3, 1, 1, 2)
-
-        self.progress.setValue(len(self.dataset.nodes))
-        self.progress = None
 
         self.setLayout(layout)
 

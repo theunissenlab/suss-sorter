@@ -5,7 +5,7 @@ from functools import partial
 
 import numpy as np
 from PyQt5 import QtWidgets as widgets
-from PyQt5.QtCore import Qt, QObject, QTimer, pyqtSignal
+from PyQt5.QtCore import Qt, QObject, pyqtSignal
 from PyQt5 import QtGui as gui
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.collections import LineCollection
@@ -21,6 +21,7 @@ class TimeseriesPlot(widgets.QFrame):
         super().__init__(parent)
         self.size = size
 
+        self._rotation_period = 200
         self.setup_plots()
         self.setup_data()
         self.init_ui()
@@ -34,7 +35,7 @@ class TimeseriesPlot(widgets.QFrame):
     def reset(self):
         # Delete the old layout
         # widgets.QWidget().setLayout(self.layout())
-        for _, scatters in self.scatters.items():
+        for label, scatters in self.scatters.items():
             for scat in scatters:
                 scat.remove()
             del scatters[:]
@@ -80,21 +81,18 @@ class TimeseriesPlot(widgets.QFrame):
         self.main_scatters = []
 
         self._frame = 0
-        self.timer = QTimer()
-        # TODO (kevin): make the speed variable
-        self.timer.start(4.0)
-        self.timer.timeout.connect(self.rotate)
+        self.parent().animation_timer.timeout.connect(self.rotate)
 
     def rotate(self):
         # TODO (kevin): make the speed variable
-        if not len(self.dataset.nodes):
+        if not len(self.dataset.nodes) or not self.main_scatters:
             return
 
-        _t = (2 * np.pi) * (self._frame % 200) / 200
+        _t = (2 * np.pi) * (self._frame % self._rotation_period) / self._rotation_period
         for dim in range(2):
             self.main_scatters[dim].set_offsets(
                 np.array([
-                    self.dataset.flatten(1).times,
+                    self.flattened.times,
                     np.cos(_t + dim * np.pi / 2) * self.pcs.T[0] + np.sin(_t + dim * np.pi / 2) * self.pcs.T[dim + 1]
                 ]).T
             )
@@ -103,11 +101,12 @@ class TimeseriesPlot(widgets.QFrame):
             for dim in range(2):
                 self.scatters[label][dim].set_offsets(
                     np.array([
-                        node.times,
+                        self.flattened.times[self.flattened.labels == label],
                         np.cos(_t + dim * np.pi / 2) * pcs.T[0] + np.sin(_t + dim * np.pi / 2) * pcs.T[dim + 1]
                     ]).T
                 )
         self._frame += 1
+        self._frame = self._frame % self._rotation_period
         self.canvas.draw_idle()
 
     def setup_data(self):
@@ -115,9 +114,15 @@ class TimeseriesPlot(widgets.QFrame):
             self.canvas.draw_idle()
             return
 
+        # FIXME (kevin): there is something funny here happening
+        # when the dataset is updated during an undo (which adds
+        # back in labels that were removed)
+        self.scatters = defaultdict(list)
+        self.main_scatters = []
+
         self.flattened = self.dataset.flatten(1)
 
-        self.pca = PCA(n_components=3).fit(self.dataset.flatten().waveforms)
+        self.pca = PCA(n_components=3).fit(self.flattened.waveforms)
         self.pcs = self.pca.transform(self.flattened.waveforms)
 
         self.main_scatters.append(self.ax1.scatter(
@@ -136,9 +141,6 @@ class TimeseriesPlot(widgets.QFrame):
             color="Gray",
             rasterized=True
         ))
-        ylim = max(*self.ax1.get_ylim())
-        self.ax1.set_ylim(-ylim, ylim)
-        self.ax2.set_ylim(-ylim, ylim)
 
         for label, node in zip(self.dataset.labels, self.dataset.nodes):
             pcs = self.pcs[self.flattened.labels == label]
@@ -154,6 +156,12 @@ class TimeseriesPlot(widgets.QFrame):
                     )
                 )
                 self.scatters[label][-1].set_visible(False)
+        for ax in self.axes:
+            # ax.relim()
+            ax.autoscale_view()
+            ylim = max(*ax.get_ylim())
+            ax.set_ylim(-ylim, ylim)
+
         self.canvas.draw_idle()
 
     def update_selected(self, selected=None):
@@ -162,7 +170,6 @@ class TimeseriesPlot(widgets.QFrame):
         for label in self.scatters:
             for scat in self.scatters[label]:
                 scat.set_visible(label in selected)
-        self.canvas.draw_idle()
 
     def init_ui(self):
         layout = widgets.QVBoxLayout()

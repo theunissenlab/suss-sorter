@@ -10,7 +10,7 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.collections import LineCollection
 from matplotlib.figure import Figure
 
-from suss.gui.utils import make_color_map, clear_axes
+from suss.gui.utils import make_color_map, clear_axes, get_changed_labels
 
 
 
@@ -60,9 +60,14 @@ class ClusterSelector(widgets.QScrollArea):
             self.update_checks
         )
 
-    def reset(self):
+    def reset(self, new_dataset, old_dataset):
+        old_scroll = self.verticalScrollBar().value()
+        for label in get_changed_labels(new_dataset, old_dataset):
+            if label in self._cached_cluster_info:
+                del self._cached_cluster_info[label]
         self.setup_data()
         self.init_ui()
+        self.verticalScrollBar().setValue(old_scroll)
 
     @property
     def dataset(self):
@@ -86,6 +91,17 @@ class ClusterSelector(widgets.QScrollArea):
         ordered_idx = reversed(np.argsort(self.dataset.labels))
 
         self.layout = widgets.QVBoxLayout(self)
+
+        progress = widgets.QProgressDialog(
+                "Loading {} clusters".format(
+                    len(self.dataset.nodes)
+                ),
+                None,
+                0,
+                len(self.dataset.nodes),
+                self)
+        progress.setMinimumDuration(2000)
+        progress.open()
 
         for _progress, label_idx in enumerate(ordered_idx):
             cluster_label = self.dataset.labels[label_idx]
@@ -142,8 +158,9 @@ class ClusterSelector(widgets.QScrollArea):
             container.setLayout(cluster_layout)
 
             self.layout.addWidget(container)
-            if self.parent().progress:
-                self.parent().progress.setValue(_progress)
+            progress.setValue(_progress)
+
+        progress.setValue(len(self.dataset.nodes))
 
     def init_ui(self):
         self.frame = widgets.QGroupBox()
@@ -189,13 +206,13 @@ class ClusterInfo(widgets.QWidget):
                 mean - std,
                 mean + std,
                 color="Black",
-                alpha=0.25)
+                alpha=0.25,
+                rasterized=True)
         self.ax_wf.plot(
                 mean,
                 color=self.color,
                 alpha=1.0,
-                linewidth=2,
-                rasterized=True)
+                linewidth=2)
         self.ax_wf.set_ylim(-150, 100)
         self.ax_wf.hlines(
                 [-100, -50, 0, 50],
@@ -219,7 +236,8 @@ class ClusterInfo(widgets.QWidget):
                 bins=50,
                 range=(0, 0.05),
                 density=True,
-                color="Black")
+                color="Black",
+                rasterized=True)
         self.ax_isi.text(
                 self.ax_isi.get_xlim()[1] * 0.9,
                 self.ax_isi.get_ylim()[1] * 0.9,
@@ -240,7 +258,8 @@ class ClusterInfo(widgets.QWidget):
                 bins=100,
                 range=(-200, 0),
                 density=True,
-                color="Black")
+                color="Black",
+                rasterized=True)
         self.ax_skew.vlines(
                 [-100, -50],
                 *self.ax_skew.get_ylim(),
