@@ -73,6 +73,7 @@ class WaveformsPlot(widgets.QFrame):
         flattened = self.dataset.flatten(1)
         if selected is None:
             selected = set()
+
         for label in selected:
             if label in self._cached_cluster_stats:
                 mean, std = self._cached_cluster_stats[label]

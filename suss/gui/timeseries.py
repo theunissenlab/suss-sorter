@@ -170,6 +170,7 @@ class TimeseriesPlot(widgets.QFrame):
             selected = set()
         for label in self.scatters:
             for scat in self.scatters[label]:
+                scat.set_color(self.colors[label])
                 scat.set_visible(label in selected)
 
     def init_ui(self):

@@ -5,7 +5,7 @@ from functools import partial
 
 import numpy as np
 from PyQt5 import QtWidgets as widgets
-from PyQt5.QtCore import Qt, QObject, QTimer, pyqtSignal
+from PyQt5.QtCore import Qt, QObject, QTimer, QThread, pyqtSignal
 from PyQt5 import QtGui as gui
 from matplotlib import cm
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -26,6 +26,8 @@ class App(widgets.QMainWindow):
 
     def __init__(self):
         super().__init__()
+        self.tsnethread = QThread()
+
         self.title = "SUSS Viewer"
         self.suss_viewer = None
         self.init_actions()
@@ -103,6 +105,9 @@ class App(widgets.QMainWindow):
         elif filename.endswith("npy"):
             dataset = suss.io.read_numpy(filename)
 
+        if hasattr(self.suss_viewer, "tsne_plot_widget"):
+            self.suss_viewer.tsne_plot_widget.reset()
+
         # After dataset is loaded, connect the save function
         self.save_action.triggered.connect(self.run_file_saver)
         self.display_suss_viewer(dataset)
@@ -113,7 +118,7 @@ class App(widgets.QMainWindow):
                 self,
                 "Save",
                 "Successfully saved {} to {}".format(
-                    dataset,
+                    self.suss_viewer.dataset,
                     filename
                 )
         )
@@ -209,14 +214,16 @@ class SussViewer(widgets.QFrame):
             return
 
         with self.timer_paused():
-            _old_dataset = self.dataset
-
-            self.stack.pop()
+            last_action, _old_dataset = self.stack.pop()
             _new_dataset = self.dataset
 
             new_labels = set(self.dataset.labels)
             changed_labels = get_changed_labels(self.dataset, _old_dataset)
-            self.selected = set.intersection(new_labels, changed_labels)
+
+            if "delete unselected" in last_action:
+                self.selected = set(_old_dataset.labels)
+            else:
+                self.selected = set.intersection(new_labels, changed_labels)
             self.colors = make_color_map(self.dataset.labels)
             self.dataset_changed.emit(
                 self.dataset,
@@ -260,7 +267,7 @@ class SussViewer(widgets.QFrame):
         self.selected_changed.emit(self.selected)
         # self.dataset_updated()
 
-    def _delete(self, to_delete):
+    def _delete(self, to_delete, action="delete"):
         if len(to_delete) == 0:
             widgets.QMessageBox.warning(
                     self,
@@ -273,7 +280,7 @@ class SussViewer(widgets.QFrame):
             _new_dataset = _new_dataset.delete_node(label=label)
 
         plural = "s" if len(to_delete) > 1 else ""
-        self._enstack("delete node" + plural, _new_dataset)
+        self._enstack("{} node".format(action) + plural, _new_dataset)
 
     def delete(self):
         self._delete(self.selected)
@@ -282,7 +289,9 @@ class SussViewer(widgets.QFrame):
     def delete_unselected(self):
         labels = set(self.dataset.labels)
         to_delete = labels - self.selected
-        self._delete(to_delete)
+        self.selected = set()
+        self._delete(to_delete, action="delete unselected")
+        self.selected_changed.emit(self.selected)
 
     def save(self):
         self.parent().run_file_saver()
@@ -316,7 +325,8 @@ class SussViewer(widgets.QFrame):
         layout.setColumnStretch(2, 4)
 
         # Initialize TSNE first so it can start running TSNE in the background
-        layout.addWidget(TSNEPlot(parent=self), 2, 2, 1, 1)
+        self.tsne_plot_widget = TSNEPlot(parent=self)
+        layout.addWidget(self.tsne_plot_widget, 2, 2, 1, 1)
         layout.addWidget(ClusterSelector(parent=self), 1, 0, 3, 1)
         layout.addWidget(WaveformsPlot(parent=self), 2, 1, 1, 1)
         layout.addWidget(TimeseriesPlot(parent=self), 3, 1, 1, 2)

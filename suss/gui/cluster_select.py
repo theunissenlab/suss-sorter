@@ -14,7 +14,7 @@ from matplotlib.figure import Figure
 from suss.gui.utils import make_color_map, clear_axes, get_changed_labels
 
 
-def create_check_button(text, color, cb):
+def create_check_button(text, cb):
     button = widgets.QPushButton(text)
     button.setCheckable(True)
     button.setDefault(False)
@@ -49,7 +49,6 @@ class ClusterSelector(widgets.QScrollArea):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        # FIXME (kevin): need to cache bust colors!
         self._cached_cluster_info = {}
         self.setup_data()
         self.init_ui()
@@ -68,6 +67,14 @@ class ClusterSelector(widgets.QScrollArea):
                 del self._cached_cluster_info[label]
         self.setup_data()
         self.init_ui()
+        for label, info in self._cached_cluster_info.items():
+            info.update_color(self.colors[label])
+        for label in self.dataset.labels:
+            self.pixmaps[label].fill(gui.QColor(*[
+                255 * c
+                for c in self.colors[label]
+            ]))
+
         self.verticalScrollBar().setValue(old_scroll)
 
     @property
@@ -99,10 +106,11 @@ class ClusterSelector(widgets.QScrollArea):
                 ),
                 None,
                 0,
-                len(self.dataset.nodes),
+                len(self.dataset.nodes) + 1,
                 self)
         progress.setMinimumDuration(2000)
         progress.open()
+        self.pixmaps = {}
 
         for _progress, label_idx in enumerate(ordered_idx):
             cluster_label = self.dataset.labels[label_idx]
@@ -118,17 +126,17 @@ class ClusterSelector(widgets.QScrollArea):
             )
             check_button = create_check_button(
                 " ",
-                self.colors[cluster_label],
                 partial(self.toggle, cluster_label))
             self.buttons[cluster_label] = check_button
             header.addWidget(check_button)
             header.addWidget(header_label)
 
-            pixmap = gui.QPixmap(10, 60)
+            pixmap = gui.QPixmap(8, 60)
             pixmap.fill(gui.QColor(*[
                 255 * c
                 for c in self.colors[cluster_label]
             ]))
+            self.pixmaps[cluster_label] = pixmap
             color_banner = widgets.QLabel()
             color_banner.setPixmap(pixmap)
             color_banner.setScaledContents(True)
@@ -161,7 +169,7 @@ class ClusterSelector(widgets.QScrollArea):
             self.layout.addWidget(container)
             progress.setValue(_progress)
 
-        progress.setValue(len(self.dataset.nodes))
+        progress.setValue(len(self.dataset.nodes) + 1)
 
     def init_ui(self):
         self.frame = widgets.QGroupBox()
@@ -182,6 +190,11 @@ class ClusterInfo(widgets.QWidget):
         self.setup_plots()
         self.setup_data()
         self.init_ui()
+
+    def update_color(self, color):
+        self.color = color
+        self.wf_plot.set_color(self.color)
+        self.canvas.draw_idle()
 
     def setup_plots(self):
         fig = Figure()
@@ -208,11 +221,11 @@ class ClusterInfo(widgets.QWidget):
                 mean + std,
                 color="Black",
                 alpha=0.25)
-        self.ax_wf.plot(
+        self.wf_plot = self.ax_wf.plot(
                 mean,
                 color=self.color,
                 alpha=1.0,
-                linewidth=2)
+                linewidth=2)[0]
         self.ax_wf.set_ylim(-150, 100)
         self.ax_wf.hlines(
                 [-100, -50, 0, 50],
