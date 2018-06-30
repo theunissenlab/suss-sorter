@@ -17,6 +17,7 @@ from suss.core import ClusterDataset
 
 from suss.gui.cluster_select import ClusterSelector
 from suss.gui.timeseries import TimeseriesPlot
+from suss.gui.tsne import TSNEPlot
 from suss.gui.waveforms import WaveformsPlot
 from suss.gui.utils import make_color_map, get_changed_labels
 
@@ -314,6 +315,8 @@ class SussViewer(widgets.QFrame):
         layout.setColumnStretch(1, 4)
         layout.setColumnStretch(2, 4)
 
+        # Initialize TSNE first so it can start running TSNE in the background
+        layout.addWidget(TSNEPlot(parent=self), 2, 2, 1, 1)
         layout.addWidget(ClusterSelector(parent=self), 1, 0, 3, 1)
         layout.addWidget(WaveformsPlot(parent=self), 2, 1, 1, 1)
         layout.addWidget(TimeseriesPlot(parent=self), 3, 1, 1, 2)
