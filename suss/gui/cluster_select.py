@@ -273,10 +273,6 @@ class ClusterInfo(widgets.QWidget):
                 linestyle=":",
                 alpha=0.2)
         self.canvas.draw_idle()
-        # self.canvas.mpl_connect("button_press_event", self._on_press)
-
-    # def _on_press(self, event):
-    #     print(event)
 
     def init_ui(self):
         layout = widgets.QVBoxLayout()
