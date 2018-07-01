@@ -123,8 +123,6 @@ class WaveformsPlot(widgets.QFrame):
             self.highlight_plot.set_color(self.colors[new_highlight])
             self.highlight_plot.set_ydata(mean)
             self.highlight_plot.set_visible(True)
-            print("setted to mean", mean)
-            print(self.ax.get_ylim())
 
         self.highlight_plot.set_visible(True)
         self.canvas.draw_idle()
