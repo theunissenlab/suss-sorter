@@ -25,12 +25,9 @@ class TimeseriesPlot(widgets.QFrame):
         self.setup_plots()
         self.setup_data()
         self.init_ui()
-        self.parent().dataset_changed.connect(
-                self.reset
-        )
-        self.parent().selected_changed.connect(
-                self.update_selected
-        )
+        self.parent().UPDATED_CLUSTERS.connect(self.reset)
+        self.parent().CLUSTER_HIGHLIGHT.connect(self.on_cluster_highlight)
+        self.parent().CLUSTER_SELECT.connect(self.on_cluster_select)
 
     def reset(self):
         # Delete the old layout
@@ -165,13 +162,24 @@ class TimeseriesPlot(widgets.QFrame):
 
         self.canvas.draw_idle()
 
-    def update_selected(self, selected=None):
-        if selected is None:
-            selected = set()
+    def on_cluster_select(self, selected, old_selected):
         for label in self.scatters:
             for scat in self.scatters[label]:
-                scat.set_color(self.colors[label])
+                # TODO (kevin): i dont think this set color is needed
+                # scat.set_color(self.colors[label])
                 scat.set_visible(label in selected)
+
+    def on_cluster_highlight(self, new_highlight, old_highlight):
+        if old_highlight is not None and old_highlight in self.scatters:
+            for scat in self.scatters[old_highlight]:
+                scat.set_color(self.colors[old_highlight])
+                scat.set_visible(old_highlight in self.selected)
+
+        if new_highlight is not None:
+            for scat in self.scatters[new_highlight]:
+                scat.set_facecolor("White")
+                scat.set_edgecolor(self.colors[new_highlight])
+                scat.set_visible(True)
 
     def init_ui(self):
         layout = widgets.QVBoxLayout()

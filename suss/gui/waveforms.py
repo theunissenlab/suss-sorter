@@ -25,12 +25,9 @@ class WaveformsPlot(widgets.QFrame):
         self.setup_plots()
         self.setup_data()
         self.init_ui()
-        self.parent().dataset_changed.connect(
-                self.reset
-        )
-        self.parent().selected_changed.connect(
-                self.update_selected
-        )
+        self.parent().UPDATED_CLUSTERS.connect(self.reset)
+        self.parent().CLUSTER_HIGHLIGHT.connect(self.on_cluster_highlight)
+        self.parent().CLUSTER_SELECT.connect(self.on_cluster_select)
 
     def reset(self, new_dataset, old_dataset):
         for label in get_changed_labels(new_dataset, old_dataset):
@@ -62,17 +59,18 @@ class WaveformsPlot(widgets.QFrame):
                 [0, 0, 1, 1],
                 facecolor="#222222")
         self.ax.patch.set_alpha(0.8)
+        self.highlight_plot = None
 
     def setup_data(self):
         if not len(self.dataset.nodes):
             self.canvas.draw_idle()
             return
 
-    def update_selected(self, selected=None):
+    def on_cluster_select(self, selected, old_selected):
         self.ax.clear()
+        self.highlight_plot = None
+
         flattened = self.dataset.flatten(1)
-        if selected is None:
-            selected = set()
 
         for label in selected:
             if label in self._cached_cluster_stats:
@@ -96,6 +94,39 @@ class WaveformsPlot(widgets.QFrame):
                 color=self.colors[label],
                 linewidth=3,
                 rasterized=True)
+        self.canvas.draw_idle()
+
+    def on_cluster_highlight(self, new_highlight, old_highlight):
+        if new_highlight is None:
+            if self.highlight_plot is not None:
+                self.highlight_plot.set_visible(False)
+            return
+
+        if new_highlight in self._cached_cluster_stats:
+            mean, std = self._cached_cluster_stats[new_highlight]
+        else:
+            node = self.dataset.nodes[self.dataset.labels == new_highlight][0]
+            mean = node.waveform
+            std = np.std(node.waveforms, axis=0)
+            self._cached_cluster_stats[new_highlight] = (mean, std)
+
+        if new_highlight is not None and self.highlight_plot is None:
+            self.highlight_plot, = self.ax.plot(
+                np.arange(len(mean)),
+                mean,
+                color=self.colors[new_highlight],
+                alpha=1.0,
+                linewidth=2,
+                linestyle="--"
+            )
+        elif new_highlight is not None and self.highlight_plot is not None:
+            self.highlight_plot.set_color(self.colors[new_highlight])
+            self.highlight_plot.set_ydata(mean)
+            self.highlight_plot.set_visible(True)
+            print("setted to mean", mean)
+            print(self.ax.get_ylim())
+
+        self.highlight_plot.set_visible(True)
         self.canvas.draw_idle()
 
     def init_ui(self):

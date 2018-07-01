@@ -1,23 +1,13 @@
-import os
-import sys
 from collections import defaultdict
-from functools import partial
+from contextlib import contextmanager
 
 import numpy as np
 from PyQt5 import QtWidgets as widgets
-from PyQt5.QtCore import Qt, QObject, QTimer, pyqtSignal
+from PyQt5.QtCore import Qt, QObject, QThread, pyqtSignal, pyqtSlot
 from PyQt5 import QtGui as gui
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.collections import LineCollection
 from matplotlib.figure import Figure
-from sklearn.decomposition import PCA
 from scipy.spatial import distance
-
-from suss.gui.utils import make_color_map, clear_axes, get_changed_labels
-
-from PyQt5.QtCore import QThread, QObject, pyqtSignal, pyqtSlot
-import time
-
 try:
     from MulticoreTSNE import MulticoreTSNE as TSNE
 except ImportError:
@@ -39,28 +29,42 @@ class BackgroundTSNE(QObject):
 
 
 class TSNEPlot(widgets.QFrame):
+    """Window displaying clusters on a 2D plane for easier visual selection
 
+    Mouse hovering and clicking are routed through mpl events and
+    used to update the parent (SussViewer) state.
 
-    def __init__(self, size=(300, 300), parent=None):
+    Computing the T-SNE embedding is fairly slow. The initial computation
+    is done in the background while and displays once it is finished.
+    Because it is slow, changes to clusters (mergers, deletions) do not
+    trigger a re-computation of the T-SNE. This means we need to do some
+    tricky indexing (see setup_data() and on_cluster_select())
+    to get the labels right.
+    """
+
+    def __init__(self, parent=None):
         super().__init__(parent)
         self.setCursor(gui.QCursor(Qt.PointingHandCursor))
-
-        self.size = size
         self.loading = True
+        self.thread = None
         self._tsne = None
-        self.last_highlight = None
-        self.last_highlight_node = None
+        self.main_scatter = None
+        # For each label, the first is for selected
+        # the second is for highighlighted
+        self.scatters = defaultdict(list)
         self.mpl_events = []
 
+        self.last_highlight = None
+        self.last_highlight_node = None
+
         self.setup_plots()
-        self.setup_data()
+        self.run_tsne_background()
         self.init_ui()
-        self.parent().dataset_changed.connect(
-                self.update_selected
-        )
-        self.parent().selected_changed.connect(
-                self.update_selected
-        )
+
+        self.parent().UPDATED_CLUSTERS.connect(self.reset)
+        self.parent().CLUSTER_SELECT.connect(self.on_cluster_select)
+        self.parent().CLUSTER_HIGHLIGHT.connect(self.on_cluster_highlight)
+        self.window().CLOSING_DATASET.connect(self.on_close)
 
     @property
     def dataset(self):
@@ -76,105 +80,69 @@ class TSNEPlot(widgets.QFrame):
 
     def run_tsne_background(self):
         self.loading = True
-        self.flattened = self.dataset.flatten(1)
-        self.worker = BackgroundTSNE(self.flattened.waveforms)
-        self.original_index = self.flattened.ids
+        self.base_dataset = self.dataset
+        self.base_flattened = self.dataset.flatten(1)
+        self.worker = BackgroundTSNE(self.base_flattened.waveforms)
+        self.base_idx = self.base_flattened.ids
+        self.base_labels = self.base_flattened.labels
 
-        self.worker.finished.connect(self.update_scatter)
-        self.worker.moveToThread(self.window().tsnethread)
-        self.window().tsnethread.started.connect(self.worker.computeTSNE)
-        self.window().tsnethread.start()
+        self._reset_thread()
+        self.worker.finished.connect(self.on_tsne_completed)
+        self.worker.moveToThread(self.thread)
+        self.thread.started.connect(self.worker.computeTSNE)
+        self.thread.start()
 
-    def update_scatter(self, data):
+    def on_tsne_completed(self, data):
         self._tsne = data
         self.loading = False
-        self.flattened = self.dataset.flatten(1)
-        self.indexes = self.flattened.ids
-        self.labels = self.flattened.labels
-        self.update_selected(self.selected)
+        self.setup_data()
 
-    @property
     def tsne(self):
-        return self._tsne[np.isin(self.original_index, self.indexes)]
+        return self._tsne[np.isin(self.base_idx, self.current_idx)]
 
-    def update_selected(self, selected=None):
-        self.ax.clear()
-        self.scatters = {}
+    def on_close(self):
+        if self.thread:
+            self.thread.terminate()
+
+    def _reset_thread(self):
+        if self.thread:
+            self.thread.terminate()
+        self.thread = QThread(self)
+        return self.thread
+
+    def _set_mpl_events(self):
+        self.mpl_events.append(self.canvas.mpl_connect(
+            "motion_notify_event",
+            self._on_hover
+        ))
+        self.mpl_events.append(self.canvas.mpl_connect(
+            "button_press_event",
+            self._on_click
+        ))
+        self.mpl_events.append(self.canvas.mpl_connect(
+            "figure_leave_event",
+            self._on_leave
+        ))
+
+    @contextmanager
+    def disable_mpl_events(self):
         for mpl_event in self.mpl_events:
             self.canvas.mpl_disconnect(mpl_event)
-        self.mpl_events = []
-
-        self.flattened = self.dataset.flatten(1)
-        self.indexes = self.flattened.ids
-        self.labels = self.flattened.labels
-        for label in self.dataset.labels:
-            node = self.flattened.select(self.flattened.labels == label)
-            self.scatters[label] = self.ax.scatter(
-                *self.tsne[np.isin(self.indexes, node.ids)].T,
-                facecolor=self.colors[label],
-                edgecolor="White",
-                alpha=1 if label in self.selected else 0.2,
-                s=14 if label in self.selected else 5)
-            # self.update_selected(self.selected)
+        yield
+        self._set_mpl_events()
         self.canvas.draw_idle()
-
-        self.mpl_events.append(
-            self.canvas.mpl_connect("motion_notify_event", self._on_hover)
-        )
-        self.mpl_events.append(
-            self.canvas.mpl_connect("button_press_event", self._on_click)
-        )
-        self.mpl_events.append(
-            self.canvas.mpl_connect("figure_leave_event", self._on_leave)
-        )
-
-    def _on_leave(self, event):
-        self._clear_last_highlight()
-
-    def _closest_node(self, x, y):
-        closest_index = distance.cdist([[x, y]], self.tsne).argmin()
-        return closest_index
-
-    def _clear_last_highlight(self):
-        if self.last_highlight and self.last_highlight in self.scatters:
-            self.scatters[self.last_highlight].set_sizes([
-                (14 if self.last_highlight in self.selected else 5)
-                for _ in self.last_highlight_node.waveforms
-            ])
-            self.scatters[self.last_highlight].set_alpha(
-                1 if self.last_highlight in self.selected else 0.2
-            )
-        self.last_highlight = None
-        self.last_highlight_node = None
-        self.canvas.draw_idle()
-
-    def _on_hover(self, event):
-        closest_idx = self._closest_node(event.xdata, event.ydata)
-        closest_label = self.labels[closest_idx]
-
-        self._clear_last_highlight()
-
-        node = self.flattened.select(self.flattened.labels == closest_label)
-        self.last_highlight = closest_label
-        self.last_highlight_node = node
-        self.scatters[closest_label].set_sizes([25 for _ in node.waveforms])
-        self.scatters[closest_label].set_alpha(1)
-        self.canvas.draw_idle()
-
-    def _on_click(self, event):
-        if not self.last_highlight:
-            return
-        self.parent().toggle(
-            self.last_highlight,
-            self.last_highlight not in self.selected
-        )
-        self._on_hover(event)
 
     def reset(self):
-        self.ax.clear()
-        for mpl_event in self.mpl_events:
-            self.canvas.mpl_disconnect(mpl_event)
-        self.setup_data()
+        self._reset_thread()
+        with self.disable_mpl_events():
+            for label, scatters in self.scatters.items():
+                for scat in scatters:
+                    scat.remove()
+                del scatters[:]
+            if self.main_scatter is not None:
+                self.main_scatter.remove()
+                self.main_scatter = None
+            self.setup_data()
 
     def setup_plots(self):
         fig = Figure()
@@ -186,16 +154,91 @@ class TSNEPlot(widgets.QFrame):
                 [0, 0, 1, 1],
                 facecolor="#101010")
         self.ax.patch.set_alpha(0.8)
-        # self.scat = self.ax.scatter([3, 2], [4, 1], color="White", s=20)
 
     def setup_data(self):
-        if not len(self.dataset.nodes):
+        if self._tsne is None or not len(self.dataset.nodes):
             self.canvas.draw_idle()
             return
-        self.run_tsne_background()
+
+        self.scatters = defaultdict(list)
+
+        self.flattened = self.dataset.flatten(1)
+        self.current_idx = self.flattened.ids
+        self.current_labels = self.flattened.labels
+
+        tsne = self.tsne()
+
+        self.main_scatter = self.ax.scatter(
+            *tsne.T,
+            s=5,
+            alpha=0.4,
+            facecolors=[self.colors[label] for label in self.current_labels],
+            edgecolor="White",
+            rasterized=True
+        )
+
+        # for label, node in zip(self.dataset.labels, self.dataset.nodes):
+        for label in self.dataset.labels:
+            node = self.flattened.select(self.current_labels == label)
+            # ids = node.flatten(1).ids
+            ids = node.ids
+            self.scatters[label].append(self.ax.scatter(
+                *tsne[np.isin(self.current_idx, ids)].T,
+                facecolor=self.colors[label],
+                edgecolor="White",
+                s=14,
+                alpha=1,
+                rasterized=True))
+            self.scatters[label][-1].set_visible(False)
+            self.scatters[label].append(self.ax.scatter(
+                *tsne[np.isin(self.current_idx, ids)].T,
+                facecolor="White",
+                edgecolor=self.colors[label],
+                s=20,
+                alpha=1,
+                rasterized=True))
+            self.scatters[label][-1].set_visible(False)
+
+        self._set_mpl_events()
         self.canvas.draw_idle()
 
     def init_ui(self):
         layout = widgets.QVBoxLayout()
         layout.addWidget(self.canvas)
         self.setLayout(layout)
+
+    def on_cluster_select(self, selected, old_selected):
+        for label in self.scatters:
+            scat = self.scatters[label][0]
+            scat.set_visible(label in selected)
+
+        self.canvas.draw_idle()
+
+    def on_cluster_highlight(self, new_highlight, old_highlight):
+        if old_highlight in self.scatters:
+            self.scatters[old_highlight][1].set_visible(False)
+        if new_highlight is not None:
+            self.scatters[new_highlight][1].set_visible(True)
+
+        self.canvas.draw_idle()
+
+    def _on_leave(self, event):
+        self.parent().set_highlight(None)
+
+    def _closest_node(self, x, y):
+        """Return the index of the closest node, and the distance"""
+        dist = distance.cdist([[x, y]], self.tsne())
+        closest_index = dist.argmin()
+        return closest_index, dist.flatten()[closest_index]
+
+    def _on_hover(self, event):
+        closest_idx, dist = self._closest_node(event.xdata, event.ydata)
+        if dist < 10.0:
+            closest_label = self.current_labels[closest_idx]
+            self.parent().set_highlight(closest_label)
+        else:
+            self.parent().set_highlight(None)
+
+    def _on_click(self, event):
+        label = self.parent().highlighted
+        self.parent().toggle_selected(label, label not in self.selected)

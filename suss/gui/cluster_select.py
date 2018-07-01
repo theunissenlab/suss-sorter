@@ -53,12 +53,14 @@ class ClusterSelector(widgets.QScrollArea):
         self.setup_data()
         self.init_ui()
 
-        self.parent().dataset_changed.connect(
+        self.parent().UPDATED_CLUSTERS.connect(
             self.reset
         )
-        self.parent().selected_changed.connect(
+        self.parent().CLUSTER_SELECT.connect(
             self.update_checks
         )
+        # self.parent().CLUSTER_HIGHLIGHT.connect(
+        #  )
 
     def reset(self, new_dataset, old_dataset):
         old_scroll = self.verticalScrollBar().value()
@@ -86,7 +88,7 @@ class ClusterSelector(widgets.QScrollArea):
         return self.parent().colors
 
     def toggle(self, label, selected):
-        self.parent().toggle(label, selected)
+        self.parent().toggle_selected(label, selected)
 
     def update_checks(self, selected):
         for label, button in self.buttons.items():

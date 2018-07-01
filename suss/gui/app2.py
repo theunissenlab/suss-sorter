@@ -24,28 +24,43 @@ from suss.gui.utils import make_color_map, get_changed_labels
 
 class App(widgets.QMainWindow):
 
+    CLOSING_DATASET = pyqtSignal()
+    LOADED_DATASET = pyqtSignal()
+
     def __init__(self):
         super().__init__()
-        self.tsnethread = QThread()
-
         self.title = "SUSS Viewer"
         self.suss_viewer = None
         self.init_actions()
         self.init_ui()
+        self.setup_shortcuts()
+
+    def setup_shortcuts(self):
+        self.save_shortcut = widgets.QShortcut(
+            gui.QKeySequence("Ctrl+S"), self)
+        self.save_shortcut.activated.connect(
+            self.run_file_saver)
+
+        self.load_shortcut = widgets.QShortcut(
+            gui.QKeySequence("Ctrl+O"), self)
+        self.load_shortcut.activated.connect(
+            self.run_file_loader)
 
     def init_actions(self):
         self.load_action = widgets.QAction("Load", self)
         self.save_action = widgets.QAction("Save", self)
-        self.close_action = widgets.QAction("Exit", self)
+        self.close_action = widgets.QAction("Exit SussViewer", self)
 
         self.load_action.triggered.connect(self.run_file_loader)
+        self.save_action.triggered.connect(self.run_file_saver)
         self.close_action.triggered.connect(self.close)
 
     def init_ui(self):
         self.setWindowTitle(self.title)
 
         mainMenu = self.menuBar()
-        fileMenu = mainMenu.addMenu("File")
+        fileMenu = mainMenu.addMenu("&File")
+        # fileMenu.setWidth(500)
 
         fileMenu.addAction(self.load_action)
         fileMenu.addAction(self.save_action)
@@ -66,6 +81,8 @@ class App(widgets.QMainWindow):
         self.splash.quit_button.clicked.connect(self.close)
 
     def display_suss_viewer(self, dataset):
+        if self.suss_viewer:
+            self.CLOSING_DATASET.emit()
         self.suss_viewer = SussViewer(dataset, self)
         self.setCentralWidget(self.suss_viewer)
         self.resize(1200, 600)
@@ -86,6 +103,9 @@ class App(widgets.QMainWindow):
             self.load_dataset(selected_file)
 
     def run_file_saver(self):
+        if not self.suss_viewer:
+            return
+
         options = widgets.QFileDialog.Options()
         options |= widgets.QFileDialog.DontUseNativeDialog
         default_name = self.current_file.replace("sorted", "curated")
@@ -109,7 +129,6 @@ class App(widgets.QMainWindow):
             self.suss_viewer.tsne_plot_widget.reset()
 
         # After dataset is loaded, connect the save function
-        self.save_action.triggered.connect(self.run_file_saver)
         self.display_suss_viewer(dataset)
 
     def save_dataset(self, filename):
@@ -125,34 +144,88 @@ class App(widgets.QMainWindow):
 
 
 class Splash(widgets.QWidget):
+    """Splash screen displaying initial options"""
+
     def __init__(self, parent=None):
         super().__init__(parent)
         layout = widgets.QVBoxLayout(self)
         self.main_button = widgets.QPushButton("Load Dataset", self)
         self.quit_button = widgets.QPushButton("Quit", self)
-        self.main_button.setFixedWidth(200)
         layout.addWidget(self.main_button)
         layout.addWidget(self.quit_button)
         self.setLayout(layout)
 
 
 class SussViewer(widgets.QFrame):
+    """Main window for working with a dataset
+
+    Responsible for passing signals between the app components
+    regarding changes to the dataset, as well as holding the app state.
+    All subcomponents should reference the SussViewer object
+    for the current dataset state, the currently selected clusters,
+    and the currently highlighted cluster.
+    """
 
     # Emits the new dataset object and the old dataset object
-    dataset_changed = pyqtSignal(object, object)
-    selected_changed = pyqtSignal(set)
+    UPDATED_CLUSTERS = pyqtSignal(object, object)
+    # Emits a set of cluster labels that are currently selected and previously
+    CLUSTER_SELECT = pyqtSignal(set, set)
+    # Emits an integer label for the cluster that should be highlighted and previous
+    CLUSTER_HIGHLIGHT = pyqtSignal(object, object)
 
     def __init__(self, dataset=None, parent=None):
         super().__init__(parent)
         self.stack = [("load", dataset)]
+
+        self.selected = set()
+        self.highlighted = None
+
         self.animation_timer = QTimer()
         self.animation_timer.start(4.0)
 
-        self.selected = set()
         self.init_ui()
         self.setup_shortcuts()
 
-        self.dataset_changed.connect(self.on_dataset_changed)
+        self.UPDATED_CLUSTERS.connect(self.on_dataset_changed)
+
+    @property
+    def dataset(self):
+        return self.stack[-1][1]
+
+    @property
+    def last_action(self):
+        return self.stack[-1][0]
+
+    def set_highlight(self, label):
+        """Update highlight state and emit signal"""
+        _old_label = self.highlighted
+        self.highlighted = label
+        self.CLUSTER_HIGHLIGHT.emit(self.highlighted,
+                _old_label if _old_label else None)
+
+    def set_selected(self, selected):
+        """Update selection state and emit signal if changed"""
+        _old_selected = self.selected.copy()
+        if selected != self.selected:
+            self.selected = selected
+            self.CLUSTER_SELECT.emit(self.selected, _old_selected)
+
+    def toggle_selected(self, label, selected):
+        """Update selection state by setting a single label's state
+        
+        Emit signal only if the selection has changed"""
+        _old_selected = self.selected.copy()
+        if selected and label not in self.selected:
+            self.selected.add(label)
+            self.CLUSTER_SELECT.emit(self.selected, _old_selected)
+        elif not selected and label in self.selected:
+            self.selected.remove(label)
+            self.CLUSTER_SELECT.emit(self.selected, _old_selected)
+        else:
+            pass
+
+    def on_dataset_changed(self):
+        self.colors = make_color_map(self.dataset.labels)
 
     @contextmanager
     def timer_paused(self):
@@ -191,19 +264,12 @@ class SussViewer(widgets.QFrame):
         self.merge_shortcut.activated.connect(
             self.merge)
 
-    @property
-    def dataset(self):
-        return self.stack[-1][1]
-
-    @property
-    def last_action(self):
-        return self.stack[-1][0]
-
     def _enstack(self, action, dataset):
         with self.timer_paused():
             _old_dataset = self.dataset
             self.stack.append((action, dataset))
-            self.dataset_changed.emit(
+            self.colors = make_color_map(self.dataset.labels)
+            self.UPDATED_CLUSTERS.emit(
                     self.dataset,
                     _old_dataset,
             )
@@ -220,33 +286,36 @@ class SussViewer(widgets.QFrame):
             new_labels = set(self.dataset.labels)
             changed_labels = get_changed_labels(self.dataset, _old_dataset)
 
+            _old_selected = self.selected.copy()
             if "delete unselected" in last_action:
                 self.selected = set(_old_dataset.labels)
             else:
                 self.selected = set.intersection(new_labels, changed_labels)
             self.colors = make_color_map(self.dataset.labels)
-            self.dataset_changed.emit(
+            self.UPDATED_CLUSTERS.emit(
                 self.dataset,
                 _old_dataset
             ) 
-            self.selected_changed.emit(self.selected)
+            self.CLUSTER_SELECT.emit(self.selected, _old_selected)
 
     def reset(self):
         with self.timer_paused():
             _old_dataset = self.dataset
             self.stack = self.stack[:1]
-            self.dataset_changed.emit(
+            self.colors = make_color_map(self.dataset.labels)
+            self.UPDATED_CLUSTERS.emit(
                 self.dataset,
                 _old_dataset
             )
             self.dataset_updated()
 
     def select_all(self):
+        _old_selected = self.selected.copy()
         if self.selected == set(self.dataset.labels):
             self.selected = set()
         else:
             self.selected = set(self.dataset.labels)
-        self.selected_changed.emit(self.selected)
+        self.CLUSTER_SELECT.emit(self.selected, _old_selected)
 
     def merge(self):
         if len(self.selected) < 2:
@@ -261,10 +330,11 @@ class SussViewer(widgets.QFrame):
         new_labels = set(_new_dataset.labels)
         changed_labels = get_changed_labels(_new_dataset, self.dataset)
 
+        _old_selected = self.selected.copy()
         self.selected = set.intersection(new_labels, changed_labels)
         self.colors = make_color_map(_new_dataset.labels)
         self._enstack("merge", _new_dataset)
-        self.selected_changed.emit(self.selected)
+        self.CLUSTER_SELECT.emit(self.selected, _old_selected)
         # self.dataset_updated()
 
     def _delete(self, to_delete, action="delete"):
@@ -289,9 +359,10 @@ class SussViewer(widgets.QFrame):
     def delete_unselected(self):
         labels = set(self.dataset.labels)
         to_delete = labels - self.selected
+        _old_selected = self.selected.copy()
         self.selected = set()
         self._delete(to_delete, action="delete unselected")
-        self.selected_changed.emit(self.selected)
+        self.CLUSTER_SELECT.emit(self.selected, _old_selected)
 
     def save(self):
         self.parent().run_file_saver()
@@ -300,21 +371,9 @@ class SussViewer(widgets.QFrame):
         self.parent().run_file_loader()
 
     def clear(self):
+        _old_selected = self.selected.copy()
         self.selected = set()
-        self.selected_changed.emit(self.selected)
-
-    def toggle(self, label, selected):
-        if selected and label not in self.selected:
-            self.selected.add(label)
-            self.selected_changed.emit(self.selected)
-        elif not selected and label in self.selected:
-            self.selected.remove(label)
-            self.selected_changed.emit(self.selected)
-        else:
-            pass
-
-    def on_dataset_changed(self):
-        self.colors = make_color_map(self.dataset.labels)
+        self.CLUSTER_SELECT.emit(self.selected, _old_selected)
 
     def init_ui(self):
         self.on_dataset_changed()
@@ -324,9 +383,10 @@ class SussViewer(widgets.QFrame):
         layout.setColumnStretch(1, 4)
         layout.setColumnStretch(2, 4)
 
-        # Initialize TSNE first so it can start running TSNE in the background
-        self.tsne_plot_widget = TSNEPlot(parent=self)
-        layout.addWidget(self.tsne_plot_widget, 2, 2, 1, 1)
+        # Initialize TSNEPlot first so that the T-SNE embedding
+        # can be computed in the background while the other components
+        # are being initialized
+        layout.addWidget(TSNEPlot(parent=self), 2, 2, 1, 1)
         layout.addWidget(ClusterSelector(parent=self), 1, 0, 3, 1)
         layout.addWidget(WaveformsPlot(parent=self), 2, 1, 1, 1)
         layout.addWidget(TimeseriesPlot(parent=self), 3, 1, 1, 2)
