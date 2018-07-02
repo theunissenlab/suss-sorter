@@ -97,7 +97,11 @@ class ISIPlot(widgets.QFrame):
         ).flatten()
 
         isi = np.diff(clusters.times)
-        isi_violations = np.sum(isi < 0.001) / len(isi)
+        if not len(isi):
+            self.canvas.draw_idle()
+            return
+
+        isi_violations = len(np.where(isi < 0.001)) / len(isi)
 
         across_clusters = clusters.labels[:-1] != clusters.labels[1:]
         within_cluster = clusters.labels[:-1] == clusters.labels[1:]
