@@ -416,6 +416,12 @@ class SussViewer(widgets.QFrame):
 
 if __name__ == "__main__":
     app = widgets.QApplication(sys.argv)
-    window = App()
+    try:
+        window = App()
+    except:
+        recovery_file = "{}.recovery.pkl".format(os.path.basename(window.current_file))
+        print("A horrible error has occured. Saving recovery file at {}".format(recovery_file))
+        window.save_dataset(recovery_file)
+        raise
     sys.exit(app.exec_())
 
