@@ -14,12 +14,25 @@ from matplotlib.figure import Figure
 from suss.gui.utils import make_color_map, clear_axes, get_changed_labels
 
 
-def create_check_button(text, cb):
-    button = widgets.QPushButton(text)
+class HoverButton(widgets.QPushButton):
+    hover = pyqtSignal(bool)
+
+    def __init__(self, text, parent=None):
+        super().__init__(text, parent)
+        self.setMouseTracking(True)
+
+    def enterEvent(self, QEvent):
+        self.hover.emit(True)
+
+    def leaveEvent(self, QEvent):
+        self.hover.emit(False)
+
+
+def create_check_button(text):
+    button = HoverButton(text)
     button.setCheckable(True)
     button.setDefault(False)
     button.setAutoDefault(False)
-    button.clicked[bool].connect(cb)
 
     def flip_text(selected):
         if selected:
@@ -53,14 +66,9 @@ class ClusterSelector(widgets.QScrollArea):
         self.setup_data()
         self.init_ui()
 
-        self.parent().UPDATED_CLUSTERS.connect(
-            self.reset
-        )
-        self.parent().CLUSTER_SELECT.connect(
-            self.update_checks
-        )
-        # self.parent().CLUSTER_HIGHLIGHT.connect(
-        #  )
+        self.parent().UPDATED_CLUSTERS.connect(self.reset)
+        self.parent().CLUSTER_SELECT.connect(self.update_checks)
+        self.parent().CLUSTER_HIGHLIGHT.connect(self.on_cluster_highlight)
 
     def reset(self, new_dataset, old_dataset):
         old_scroll = self.verticalScrollBar().value()
@@ -95,8 +103,26 @@ class ClusterSelector(widgets.QScrollArea):
             button.clicked.emit(label in selected)
             button.setChecked(label in selected)
 
+    def on_cluster_highlight(self, new_highlight, old_highlight):
+        if old_highlight and old_highlight in self.panels:
+            self.panels[old_highlight].setFrameShape(widgets.QFrame.NoFrame)
+
+        if new_highlight is None:
+            return
+        new_panel = self.panels[new_highlight]
+        self.panels[new_highlight].setFrameShape(widgets.QFrame.Box)
+        if self.allow_scroll_to:
+            self.verticalScrollBar().setValue(new_panel.y())
+
+    def set_highlight(self, cluster_label, selected):
+        # Hacky flag to prevent jumping the scroll bar
+        # when highlighted through the cluster select menu
+        self.allow_scroll_to = not selected
+        self.parent().set_highlight(cluster_label if selected else None)
+
     def setup_data(self):
         self.buttons = {}
+        self.panels = {}
 
         ordered_idx = reversed(np.argsort(self.dataset.labels))
 
@@ -126,9 +152,9 @@ class ClusterSelector(widgets.QScrollArea):
                     len(cluster.nodes)
                 )
             )
-            check_button = create_check_button(
-                " ",
-                partial(self.toggle, cluster_label))
+            check_button = create_check_button(" ")
+            check_button.clicked[bool].connect(partial(self.toggle, cluster_label))
+            check_button.hover.connect(partial(self.set_highlight, cluster_label))
             self.buttons[cluster_label] = check_button
             header.addWidget(check_button)
             header.addWidget(header_label)
@@ -143,7 +169,8 @@ class ClusterSelector(widgets.QScrollArea):
             color_banner.setPixmap(pixmap)
             color_banner.setScaledContents(True)
 
-            container = widgets.QWidget(self)
+            container = widgets.QFrame(self)
+            # container.setStyleSheet("QWidget#highlighted {border: 2px dotted black;}")
             cluster_layout = widgets.QGridLayout()
             cluster_layout.addWidget(color_banner, 0, 0, 2, 1)
             cluster_layout.addLayout(header, 0, 1)
@@ -169,6 +196,7 @@ class ClusterSelector(widgets.QScrollArea):
             container.setLayout(cluster_layout)
 
             self.layout.addWidget(container)
+            self.panels[cluster_label] = container
             progress.setValue(_progress)
 
         progress.setValue(len(self.dataset.nodes) + 1)

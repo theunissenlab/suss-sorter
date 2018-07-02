@@ -380,16 +380,36 @@ class SussViewer(widgets.QFrame):
         # self.cluster_selector = ClusterSelector(parent=self)
 
         layout = widgets.QGridLayout()
-        layout.setColumnStretch(1, 4)
-        layout.setColumnStretch(2, 4)
+        layout.setRowStretch(1, 1)
+        layout.setRowStretch(2, 2)
+        layout.setRowStretch(3, 2)
+        layout.setColumnStretch(1, 1)
+        layout.setColumnStretch(2, 1)
+        layout.setColumnStretch(3, 1)
 
         # Initialize TSNEPlot first so that the T-SNE embedding
         # can be computed in the background while the other components
         # are being initialized
-        layout.addWidget(TSNEPlot(parent=self), 2, 2, 1, 1)
+
+        #   ____________________________________
+        #  |____________________________________|
+        #  |      |      |      |       |       |
+        #  |      |      |      |       |       |
+        #  |      |------|------|---------------|
+        #  |      |      |      |               |
+        #  |      |      |      |               |
+        #  |      |      |      |               |
+        #  |      |______|______|_______________|
+        #  |      |                             |
+        #  |      |                             |
+        #  |______|_____________________________|
+        #
+
+        # row, col, rowspan, colspan
+        layout.addWidget(TSNEPlot(parent=self), 1, 1, 2, 2)
         layout.addWidget(ClusterSelector(parent=self), 1, 0, 3, 1)
-        layout.addWidget(WaveformsPlot(parent=self), 2, 1, 1, 1)
-        layout.addWidget(TimeseriesPlot(parent=self), 3, 1, 1, 2)
+        layout.addWidget(WaveformsPlot(parent=self), 1, 3, 1, 1)
+        layout.addWidget(TimeseriesPlot(parent=self), 3, 1, 1, 3)
 
         self.setLayout(layout)
 

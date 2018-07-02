@@ -1,3 +1,4 @@
+import time
 from collections import defaultdict
 from contextlib import contextmanager
 
@@ -47,15 +48,13 @@ class TSNEPlot(widgets.QFrame):
         self.setCursor(gui.QCursor(Qt.PointingHandCursor))
         self.loading = True
         self.thread = None
+        self.last_update = time.time()
         self._tsne = None
         self.main_scatter = None
         # For each label, the first is for selected
         # the second is for highighlighted
         self.scatters = defaultdict(list)
         self.mpl_events = []
-
-        self.last_highlight = None
-        self.last_highlight_node = None
 
         self.setup_plots()
         self.run_tsne_background()
@@ -232,7 +231,12 @@ class TSNEPlot(widgets.QFrame):
         return closest_index, dist.flatten()[closest_index]
 
     def _on_hover(self, event):
+        if (time.time() - self.last_update) < 0.1:
+            return
+        self.last_update = time.time()
         closest_idx, dist = self._closest_node(event.xdata, event.ydata)
+        if closest_idx == self.parent().highlighted:
+            return
         if dist < 10.0:
             closest_label = self.current_labels[closest_idx]
             self.parent().set_highlight(closest_label)

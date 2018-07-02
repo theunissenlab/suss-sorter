@@ -170,7 +170,11 @@ class TimeseriesPlot(widgets.QFrame):
                 scat.set_visible(label in selected)
 
     def on_cluster_highlight(self, new_highlight, old_highlight):
-        if old_highlight is not None and old_highlight in self.scatters:
+        if (
+                old_highlight is not None and
+                old_highlight in self.scatters and
+                old_highlight in self.colors
+                ):
             for scat in self.scatters[old_highlight]:
                 scat.set_color(self.colors[old_highlight])
                 scat.set_visible(old_highlight in self.selected)

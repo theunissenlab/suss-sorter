@@ -68,6 +68,7 @@ class WaveformsPlot(widgets.QFrame):
 
     def on_cluster_select(self, selected, old_selected):
         self.ax.clear()
+        self.ax.patch.set_alpha(0.8)
         self.highlight_plot = None
 
         flattened = self.dataset.flatten(1)
