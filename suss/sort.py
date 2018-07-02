@@ -103,8 +103,13 @@ def cluster_step(dataset, dt=None, dpoints=None, n_components=2, mode="kmeans", 
                 transform=transform
             )
         )
-    print("Completed clustering of {:.2f} min in {:.1f}s.".format(
-        (t_start + dt) / 60.0, time.time() - _fn_start))
+
+    if dt:
+        print("Completed clustering of {:.2f} min in {:.1f}s.".format(
+            (t_start + dt) / 60.0, time.time() - _fn_start))
+    else:
+        print("Completed clustering of {} points in {:.1f}s.".format(
+            (t_start + dpoints), time.time() - _fn_start))
 
     return ClusterDataset(np.concatenate(_denoised_nodes))
 
