@@ -17,10 +17,8 @@ from suss.gui.utils import make_color_map, clear_axes, get_changed_labels
 
 class WaveformsPlot(widgets.QFrame):
 
-    def __init__(self, size=(700, 100), parent=None):
+    def __init__(self, parent=None):
         super().__init__(parent)
-        self._cached_cluster_stats = {}
-        self.size = size
 
         self.setup_plots()
         self.setup_data()
@@ -30,9 +28,6 @@ class WaveformsPlot(widgets.QFrame):
         self.parent().CLUSTER_SELECT.connect(self.on_cluster_select)
 
     def reset(self, new_dataset, old_dataset):
-        for label in get_changed_labels(new_dataset, old_dataset):
-            if label in self._cached_cluster_stats:
-                del self._cached_cluster_stats[label]
         self.ax.clear()
         self.canvas.draw_idle()
         self.setup_data()
@@ -57,7 +52,7 @@ class WaveformsPlot(widgets.QFrame):
 
         self.ax = fig.add_axes(
                 [0, 0, 1, 1],
-                facecolor="#222222")
+                facecolor="#111111")
         self.ax.patch.set_alpha(0.8)
         self.highlight_plot = None
 
@@ -74,13 +69,9 @@ class WaveformsPlot(widgets.QFrame):
         flattened = self.dataset.flatten(1)
 
         for label in selected:
-            if label in self._cached_cluster_stats:
-                mean, std = self._cached_cluster_stats[label]
-            else:
-                node = self.dataset.nodes[self.dataset.labels == label][0]
-                mean = node.waveform
-                std = np.std(node.waveforms, axis=0)
-                self._cached_cluster_stats[label] = (mean, std)
+            node = self.dataset.nodes[self.dataset.labels == label][0]
+            mean = node.waveform
+            std = np.std(node.waveforms, axis=0)
 
             self.ax.fill_between(
                 np.arange(len(mean)),
@@ -103,13 +94,9 @@ class WaveformsPlot(widgets.QFrame):
                 self.highlight_plot.set_visible(False)
             return
 
-        if new_highlight in self._cached_cluster_stats:
-            mean, std = self._cached_cluster_stats[new_highlight]
-        else:
-            node = self.dataset.nodes[self.dataset.labels == new_highlight][0]
-            mean = node.waveform
-            std = np.std(node.waveforms, axis=0)
-            self._cached_cluster_stats[new_highlight] = (mean, std)
+        node = self.dataset.nodes[self.dataset.labels == new_highlight][0]
+        mean = node.waveform
+        std = np.std(node.waveforms, axis=0)
 
         if new_highlight is not None and self.highlight_plot is None:
             self.highlight_plot, = self.ax.plot(

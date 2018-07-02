@@ -62,6 +62,7 @@ class ClusterSelector(widgets.QScrollArea):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.allow_scroll_to = True
         self._cached_cluster_info = {}
         self.setup_data()
         self.init_ui()

@@ -1,113 +1,172 @@
 import os
 import sys
+from contextlib import contextmanager
 from functools import partial
 
 import numpy as np
 from PyQt5 import QtWidgets as widgets
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QObject, QTimer, QThread, pyqtSignal
+from PyQt5 import QtGui as gui
+from matplotlib import cm
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.collections import LineCollection
+from matplotlib.figure import Figure
 
 import suss.io
 from suss.core import ClusterDataset
-from components import (
-    ClusterSelector,
-    ClusterManipulationOptions,
-    ISIPane,
-    OverviewScatterPane,
-    ProjectionsPane,
-    TimeseriesPane,
-    WaveformsPane,
-    get_color_dict,
-    selector_area
-)
+
+from suss.gui.cluster_select import ClusterSelector
+from suss.gui.isi import ISIPlot
+from suss.gui.timeseries import TimeseriesPlot
+from suss.gui.tsne import TSNEPlot
+from suss.gui.waveforms import WaveformsPlot
+from suss.gui.utils import make_color_map, get_changed_labels
 
 
 class App(widgets.QMainWindow):
+
+    CLOSING_DATASET = pyqtSignal()
+    LOADED_DATASET = pyqtSignal()
 
     def __init__(self):
         super().__init__()
         self.title = "SUSS Viewer"
         self.suss_viewer = None
+        self.init_actions()
         self.init_ui()
+        self.setup_shortcuts()
+
+    def setup_shortcuts(self):
+        self.save_shortcut = widgets.QShortcut(
+            gui.QKeySequence("Ctrl+S"), self)
+        self.save_shortcut.activated.connect(
+            self.run_file_saver)
+
+        self.load_shortcut = widgets.QShortcut(
+            gui.QKeySequence("Ctrl+O"), self)
+        self.load_shortcut.activated.connect(
+            self.run_file_loader)
+
+    def init_actions(self):
+        self.load_action = widgets.QAction("Load", self)
+        self.save_action = widgets.QAction("Save", self)
+        self.close_action = widgets.QAction("Exit SussViewer", self)
+        self.select_all_action = widgets.QAction("Select All (Ctrl-a)", self)
+        self.undo_action = widgets.QAction("Undo (Ctrl-z)", self)
+        self.merge_action = widgets.QAction("Merge (Ctrl-m)", self)
+        self.delete_action = widgets.QAction("Delete (Backspace)", self)
+        self.clear_action = widgets.QAction("Clear Selection (Ctrl+c)", self)
+        self.delete_others_action = widgets.QAction("Delete Unselected (Shift+Backspace)", self)
+
+        self.load_action.triggered.connect(self.run_file_loader)
+        self.save_action.triggered.connect(self.run_file_saver)
+        self.close_action.triggered.connect(self.close)
 
     def init_ui(self):
         self.setWindowTitle(self.title)
-        mainMenu = self.menuBar()
-        fileMenu = mainMenu.addMenu("File")
-        load_action = widgets.QAction("Load", self)
-        self.save_action = widgets.QAction("Save curated dataset", self)
-        close_action = widgets.QAction("Exit", self)
-        fileMenu.addAction(load_action)
-        fileMenu.addAction(self.save_action)
-        fileMenu.addAction(close_action)
-        load_action.triggered.connect(self.load_dataset)
-        close_action.triggered.connect(self.close)
 
-        self.dataset_loader = DatasetLoader(self)
-        self.setCentralWidget(self.dataset_loader)
-        self.dataset_loader.main_button.clicked.connect(self.load_dataset)
-        self.dataset_loader.quit_button.clicked.connect(self.close)
+        mainMenu = self.menuBar()
+        fileMenu = mainMenu.addMenu("&File")
+        # fileMenu.setWidth(500)
+
+        fileMenu.addAction(self.load_action)
+        fileMenu.addAction(self.save_action)
+
+        editMenu = mainMenu.addMenu("&Edit")
+        editMenu.addAction(self.select_all_action)
+        editMenu.addAction(self.merge_action)
+        editMenu.addAction(self.delete_action)
+        editMenu.addAction(self.delete_others_action)
+        editMenu.addAction(self.clear_action)
+        editMenu.addAction(self.undo_action)
+
+        self.display_splash()
 
         rect = self.frameGeometry()
         center = widgets.QDesktopWidget().availableGeometry().center()
         rect.moveCenter(center)
         self.move(rect.topLeft())
+        self.show()
 
+    def display_splash(self):
+        self.splash = Splash(self)
+        self.setCentralWidget(self.splash)
+        self.splash.main_button.clicked.connect(self.run_file_loader)
+        self.splash.quit_button.clicked.connect(self.close)
+
+    def display_suss_viewer(self, dataset):
+        if self.suss_viewer:
+            self.CLOSING_DATASET.emit()
+        self.suss_viewer = SussViewer(dataset, self)
+        self.setCentralWidget(self.suss_viewer)
+        self.showMaximized()
         self.show()
             
-    def load_dataset(self):
+    def run_file_loader(self):
         options = widgets.QFileDialog.Options()
         options |= widgets.QFileDialog.DontUseNativeDialog
-        self.selected_file, _ = widgets.QFileDialog.getOpenFileName(
+        selected_file, _ = widgets.QFileDialog.getOpenFileName(
             self,
             "Load dataset",
             ".",
-            "(*.pkl *.npy)",
+            "(*.pkl)",
             options=options)
-        if not self.selected_file:
-            return
-        else:
-            loading = widgets.QLabel(self)
-            loading.setText("Loading {}".format(self.selected_file))
-            loading.setAlignment(Qt.AlignCenter)
-            self.setCentralWidget(loading)
-            self.resize(1200, 600)
-            self.show()
-            if self.selected_file.endswith("pkl"):
-                dataset = suss.io.read_pickle(self.selected_file)
-            elif self.selected_file.endswith("npy"):
-                dataset = suss.io.read_numpy(self.selected_file)
-            self.suss_viewer = SussViewer(dataset, self)
-            self.setCentralWidget(self.suss_viewer)
-            self.resize(1200, 600)
-            self.show()
-            self.save_action.triggered.connect(partial(self.save_dataset, self.suss_viewer.dataset))
+        
+        if selected_file:
+            self.current_file = selected_file
+            self.load_dataset(selected_file)
 
-    def save_dataset(self, dataset):
+        self.undo_action.triggered.connect(self.suss_viewer._undo)
+        self.merge_action.triggered.connect(self.suss_viewer.merge)
+        self.delete_action.triggered.connect(self.suss_viewer.delete)
+        self.delete_others_action.triggered.connect(self.suss_viewer.delete_unselected)
+        self.clear_action.triggered.connect(self.suss_viewer.clear)
+        self.select_all_action.triggered.connect(self.suss_viewer.select_all)
+
+    def run_file_saver(self):
+        if not self.suss_viewer:
+            return
+
         options = widgets.QFileDialog.Options()
         options |= widgets.QFileDialog.DontUseNativeDialog
-
-        try:
-            part1, part2 = self.selected_file.split("_")
-            _, part2 = part2.split("-")
-            default_name = "{}_curated-{}".format(part1, part2)
-        except:
-            default_name = self.selected_file.replace("sorted", "curated")
-
-        file_name, _ = widgets.QFileDialog.getSaveFileName(
+        default_name = self.current_file.replace("sorted", "curated")
+        filename, _ = widgets.QFileDialog.getSaveFileName(
             self,
             "Save dataset",
             default_name,
             "(*.pkl)",
             options=options)
-        if not file_name:
-            return
-        else:
-            suss.io.save_pickle(file_name, dataset)
-            widgets.QMessageBox.information(self, "Save", "Successfully saved {} to {}".format(dataset, file_name))
+
+        if filename:
+            self.save_dataset(filename)
+
+    def load_dataset(self, filename):
+        if filename.endswith("pkl"):
+            dataset = suss.io.read_pickle(filename)
+        elif filename.endswith("npy"):
+            dataset = suss.io.read_numpy(filename)
+
+        if hasattr(self.suss_viewer, "tsne_plot_widget"):
+            self.suss_viewer.tsne_plot_widget.reset()
+
+        # After dataset is loaded, connect the save function
+        self.display_suss_viewer(dataset)
+
+    def save_dataset(self, filename):
+        suss.io.save_pickle(filename, self.suss_viewer.dataset)
+        widgets.QMessageBox.information(
+                self,
+                "Save",
+                "Successfully saved {} to {}".format(
+                    self.suss_viewer.dataset,
+                    filename
+                )
+        )
 
 
+class Splash(widgets.QWidget):
+    """Splash screen displaying initial options"""
 
-class DatasetLoader(widgets.QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         layout = widgets.QVBoxLayout(self)
@@ -119,132 +178,272 @@ class DatasetLoader(widgets.QWidget):
 
 
 class SussViewer(widgets.QFrame):
+    """Main window for working with a dataset
+
+    Responsible for passing signals between the app components
+    regarding changes to the dataset, as well as holding the app state.
+    All subcomponents should reference the SussViewer object
+    for the current dataset state, the currently selected clusters,
+    and the currently highlighted cluster.
+    """
+
+    # Emits the new dataset object and the old dataset object
+    UPDATED_CLUSTERS = pyqtSignal(object, object)
+    # Emits a set of cluster labels that are currently selected and previously
+    CLUSTER_SELECT = pyqtSignal(set, set)
+    # Emits an integer label for the cluster that should be highlighted and previous
+    CLUSTER_HIGHLIGHT = pyqtSignal(object, object)
 
     def __init__(self, dataset=None, parent=None):
         super().__init__(parent)
-        self.original_dataset = dataset
-        self.dataset = dataset
-        self.active_clusters = set()
-        self.setup_panes()
+        self.stack = [("load", dataset)]
 
-    def setup_panes(self):
-        color_dict = get_color_dict(self.dataset.labels)
-        self.projections = ProjectionsPane(self.dataset, color_dict, size=(300, 350), facecolor="#666666")
-        self.overview = OverviewScatterPane(self.dataset, color_dict, size=(100, 100), facecolor="#444444")
-        self.timeseries = TimeseriesPane(self.dataset, color_dict, n_components=3, size=(700, 100), facecolor="#888888")
-        self.waveforms = WaveformsPane(self.dataset, color_dict, size=(300, 250), facecolor="#444444")
-        self.isi = ISIPane(self.dataset, color_dict, size=(200, 100), facecolor="#444444")
-        self.cluster_selector = ClusterSelector(
+        self.selected = set()
+        self.highlighted = None
+
+        self.animation_timer = QTimer()
+        self.animation_timer.start(4.0)
+
+        self.init_ui()
+        self.setup_shortcuts()
+
+        self.UPDATED_CLUSTERS.connect(self.on_dataset_changed)
+
+    @property
+    def dataset(self):
+        return self.stack[-1][1]
+
+    @property
+    def last_action(self):
+        return self.stack[-1][0]
+
+    def set_highlight(self, label):
+        """Update highlight state and emit signal"""
+        _old_label = self.highlighted
+        self.highlighted = label
+        self.CLUSTER_HIGHLIGHT.emit(self.highlighted,
+                _old_label if _old_label else None)
+
+    def set_selected(self, selected):
+        """Update selection state and emit signal if changed"""
+        _old_selected = self.selected.copy()
+        if selected != self.selected:
+            self.selected = selected
+            self.CLUSTER_SELECT.emit(self.selected, _old_selected)
+
+    def toggle_selected(self, label, selected):
+        """Update selection state by setting a single label's state
+        
+        Emit signal only if the selection has changed"""
+        _old_selected = self.selected.copy()
+        if selected and label not in self.selected:
+            self.selected.add(label)
+            self.CLUSTER_SELECT.emit(self.selected, _old_selected)
+        elif not selected and label in self.selected:
+            self.selected.remove(label)
+            self.CLUSTER_SELECT.emit(self.selected, _old_selected)
+        else:
+            pass
+
+    def on_dataset_changed(self):
+        self.colors = make_color_map(self.dataset.labels)
+
+    @contextmanager
+    def timer_paused(self):
+        self.animation_timer.stop()
+        yield
+        self.animation_timer.start(4.0)
+
+    def setup_shortcuts(self):
+        self.undo_shortcut = widgets.QShortcut(
+            gui.QKeySequence.Undo, self)
+        self.undo_shortcut.activated.connect(
+            self._undo)
+
+        self.delete_shortcut = widgets.QShortcut(
+            gui.QKeySequence("Backspace"), self)
+        self.delete_shortcut.activated.connect(
+            self.delete)
+
+        self.delete_unselected_shortcut = widgets.QShortcut(
+            gui.QKeySequence("Shift+Backspace"), self)
+        self.delete_unselected_shortcut.activated.connect(
+            self.delete_unselected)
+
+        self.select_all_shortcut = widgets.QShortcut(
+            gui.QKeySequence.SelectAll, self)
+        self.select_all_shortcut.activated.connect(
+            self.select_all)
+
+        self.clear_shortcut = widgets.QShortcut(
+            gui.QKeySequence("Ctrl+C"), self)
+        self.clear_shortcut.activated.connect(
+            self.clear)
+
+        self.merge_shortcut = widgets.QShortcut(
+            gui.QKeySequence("Ctrl+M"), self)
+        self.merge_shortcut.activated.connect(
+            self.merge)
+
+    def _enstack(self, action, dataset):
+        with self.timer_paused():
+            _old_dataset = self.dataset
+            self.stack.append((action, dataset))
+            self.colors = make_color_map(self.dataset.labels)
+            self.UPDATED_CLUSTERS.emit(
+                    self.dataset,
+                    _old_dataset,
+            )
+
+    def _undo(self):
+        if len(self.stack) == 1:
+            print("Nothing left to undo.")
+            return
+
+        with self.timer_paused():
+            last_action, _old_dataset = self.stack.pop()
+            _new_dataset = self.dataset
+
+            new_labels = set(self.dataset.labels)
+            changed_labels = get_changed_labels(self.dataset, _old_dataset)
+
+            _old_selected = self.selected.copy()
+            if "delete unselected" in last_action:
+                self.selected = set(_old_dataset.labels)
+            else:
+                self.selected = set.intersection(new_labels, changed_labels)
+            self.colors = make_color_map(self.dataset.labels)
+            self.UPDATED_CLUSTERS.emit(
                 self.dataset,
-                color_dict,
-                self.toggle,
-                ondelete=self.delete
-        )
-        self.actions_panel = ClusterManipulationOptions(
-            reset_cb=self.reset,
-            clear_cb=self.clear,
-            merge_cb=self.merge,
-            save_cb=self.save,
-            load_cb=self.load,
-        )
-
-        # scroll_area = selector_area(self.dataset, 140, color_dict, self.toggle)
-
-        outer_2 = widgets.QHBoxLayout()
-        outer_1 = widgets.QVBoxLayout()
-        inner_1 = widgets.QHBoxLayout()
-        inner_2 = widgets.QVBoxLayout()
-        inner_3 = widgets.QHBoxLayout()
-        inner_1.addWidget(self.projections)
-        inner_3.addWidget(self.isi)
-        inner_3.addWidget(self.overview)
-        inner_2.addLayout(inner_3)
-        inner_2.addWidget(self.waveforms)
-        inner_1.addLayout(inner_2)
-        outer_1.addLayout(inner_1)
-        outer_1.addWidget(self.timeseries)
-        outer_2.addWidget(self.cluster_selector)
-        outer_2.addLayout(outer_1)
-        outer_2.addWidget(self.actions_panel)
-
-        self.setLayout(outer_2)
+                _old_dataset
+            ) 
+            self.CLUSTER_SELECT.emit(self.selected, _old_selected)
 
     def reset(self):
-        self.dataset = self.original_dataset
-        self.clear()
-        self.dataset_updated()
+        with self.timer_paused():
+            _old_dataset = self.dataset
+            self.stack = self.stack[:1]
+            self.colors = make_color_map(self.dataset.labels)
+            self.UPDATED_CLUSTERS.emit(
+                self.dataset,
+                _old_dataset
+            )
+            self.dataset_updated()
 
-    def clear(self):
-        self.active_clusters = set()
-        self.set_active()
+    def select_all(self):
+        _old_selected = self.selected.copy()
+        if self.selected == set(self.dataset.labels):
+            self.selected = set()
+        else:
+            self.selected = set(self.dataset.labels)
+        self.CLUSTER_SELECT.emit(self.selected, _old_selected)
 
     def merge(self):
-        if len(self.active_clusters) < 2:
-            widgets.QMessageBox.warning(self, "Merge failed", "Not enough clusters selected to merge")
+        if len(self.selected) < 2:
+            widgets.QMessageBox.warning(
+                    self,
+                    "Merge failed",
+                    "Not enough clusters selected to merge")
             return
 
         old_labels = set(self.dataset.labels)
-        self.dataset = self.dataset.merge_nodes(labels=self.active_clusters)
-        new_labels = set(self.dataset.labels)
+        _new_dataset = self.dataset.merge_nodes(labels=self.selected)
+        new_labels = set(_new_dataset.labels)
+        changed_labels = get_changed_labels(_new_dataset, self.dataset)
 
-        self.active_clusters = new_labels - old_labels
-        self.dataset_updated()
+        _old_selected = self.selected.copy()
+        self.selected = set.intersection(new_labels, changed_labels)
+        self.colors = make_color_map(_new_dataset.labels)
+        self._enstack("merge", _new_dataset)
+        self.CLUSTER_SELECT.emit(self.selected, _old_selected)
+        # self.dataset_updated()
+
+    def _delete(self, to_delete, action="delete"):
+        if len(to_delete) == 0:
+            widgets.QMessageBox.warning(
+                    self,
+                    "Delete failed",
+                    "No clusters selected for deletion")
+            return
+
+        _new_dataset = self.dataset
+        for label in to_delete:
+            _new_dataset = _new_dataset.delete_node(label=label)
+
+        plural = "s" if len(to_delete) > 1 else ""
+        self._enstack("{} node".format(action) + plural, _new_dataset)
+
+    def delete(self):
+        self._delete(self.selected)
+        self.selected = set()
+
+    def delete_unselected(self):
+        labels = set(self.dataset.labels)
+        to_delete = labels - self.selected
+        _old_selected = self.selected.copy()
+        self.selected = set()
+        self._delete(to_delete, action="delete unselected")
+        self.CLUSTER_SELECT.emit(self.selected, _old_selected)
 
     def save(self):
-        self.parent().save_dataset(self.dataset)
+        self.parent().run_file_saver()
 
     def load(self):
-        self.parent().load_dataset()
+        self.parent().run_file_loader()
 
-    def delete(self, label):
-        if label in self.active_clusters:
-            self.active_clusters.remove(label)
-        self.dataset = self.dataset.delete_node(label=label)
-        self.dataset_updated()
+    def clear(self):
+        _old_selected = self.selected.copy()
+        self.selected = set()
+        self.CLUSTER_SELECT.emit(self.selected, _old_selected)
 
-    def toggle(self, selected, label=None):
-        if selected:
-            self.active_clusters.add(label)
-        else:
-            self.active_clusters.remove(label)
-        self.set_active()
+    def init_ui(self):
+        self.on_dataset_changed()
+        # self.cluster_selector = ClusterSelector(parent=self)
 
-    def dataset_updated(self):
-        self.projections.dataset = self.dataset
-        self.overview.dataset = self.dataset
-        self.timeseries.dataset = self.dataset
-        self.waveforms.dataset = self.dataset
-        self.isi.dataset = self.dataset
-        self.cluster_selector.dataset = self.dataset
+        layout = widgets.QGridLayout()
+        layout.setRowStretch(1, 1.5)
+        layout.setRowStretch(2, 1.5)
+        layout.setRowStretch(3, 2)
+        layout.setColumnStretch(1, 1)
+        layout.setColumnStretch(2, 1)
+        layout.setColumnStretch(3, 1)
 
-        color_dict = get_color_dict(self.dataset.labels)
+        # Initialize TSNEPlot first so that the T-SNE embedding
+        # can be computed in the background while the other components
+        # are being initialized
 
-        self.projections.colors = color_dict
-        self.overview.colors = color_dict
-        self.timeseries.colors = color_dict
-        self.waveforms.colors = color_dict
-        self.isi.colors = color_dict
-        self.cluster_selector.colors = color_dict
+        #   ____________________________________
+        #  |____________________________________|
+        #  |      |      |      |       |       |
+        #  |      |      |      |       |       |
+        #  |      |------|------|---------------|
+        #  |      |      |      |               |
+        #  |      |      |      |               |
+        #  |      |      |      |               |
+        #  |      |______|______|_______________|
+        #  |      |                             |
+        #  |      |                             |
+        #  |______|_____________________________|
+        #
 
-        self.projections.setup_data()
-        self.overview.setup_data()
-        self.timeseries.setup_data()
-        self.waveforms.setup_data()
-        self.isi.setup_data()
-        self.cluster_selector.setup_data()
-        self.set_active()
+        # row, col, rowspan, colspan
+        layout.addWidget(TSNEPlot(parent=self), 1, 1, 2, 2)
+        layout.addWidget(ClusterSelector(parent=self), 1, 0, 3, 1)
+        layout.addWidget(WaveformsPlot(parent=self), 2, 3, 1, 1)
+        layout.addWidget(ISIPlot(parent=self), 1, 3, 1, 1)
+        layout.addWidget(TimeseriesPlot(parent=self), 3, 1, 1, 3)
 
-    def set_active(self):
-        self.projections.update_selection(self.active_clusters)
-        self.overview.update_selection(self.active_clusters)
-        self.timeseries.update_selection(self.active_clusters)
-        self.waveforms.update_selection(self.active_clusters)
-        self.isi.update_selection(self.active_clusters)
-        self.cluster_selector.update_selection(self.active_clusters)
+        self.setLayout(layout)
 
 
 if __name__ == "__main__":
     app = widgets.QApplication(sys.argv)
-    window = App()
+    try:
+        window = App()
+    except:
+        recovery_file = "{}.recovery.pkl".format(os.path.basename(window.current_file))
+        print("A horrible error has occured. Saving recovery file at {}".format(recovery_file))
+        window.save_dataset(recovery_file)
+        raise
     sys.exit(app.exec_())
 

@@ -17,6 +17,8 @@ from suss.gui.utils import make_color_map, clear_axes
 
 class TimeseriesPlot(widgets.QFrame):
 
+    ndim = 2
+
     def __init__(self, size=(700, 100), parent=None):
         super().__init__(parent)
         self.size = size
@@ -59,20 +61,19 @@ class TimeseriesPlot(widgets.QFrame):
         self.canvas = FigureCanvas(fig)
         self.canvas.setStyleSheet("background-color:transparent;")
 
-        self.ax1 = fig.add_axes(
-                [0, 0.1, 1, 0.44],
-                facecolor="#111111")
-        self.ax1.set_yticks([])
-        self.ax1.patch.set_alpha(0.8)
+        self.axes = []
+        for dim in range(self.ndim):
+            ax = fig.add_axes(
+                [0, 0.1 + (0.9 / self.ndim) * dim, 1, 0.9 / self.ndim],
+                facecolor="#111111"
+            )
+            ax.set_yticks([])
+            ax.patch.set_alpha(0.8)
+            self.axes.append(ax)
 
-        self.ax2 = fig.add_axes(
-                [0, 0.55, 1, 0.44],
-                facecolor="#111111")
-        self.ax2.set_yticks([])
-        self.ax2.set_xticks([])
-        self.ax2.patch.set_alpha(0.8)
-
-        self.axes = [self.ax1, self.ax2]
+        for ax in self.axes[1:]:
+            ax.set_yticks([])
+            ax.set_xticks([])
 
         self.scatters = defaultdict(list)
         self.main_scatters = []
@@ -81,25 +82,24 @@ class TimeseriesPlot(widgets.QFrame):
         self.parent().animation_timer.timeout.connect(self.rotate)
 
     def rotate(self):
-        # TODO (kevin): make the speed variable
         if not len(self.dataset.nodes) or not self.main_scatters:
             return
 
         _t = (2 * np.pi) * (self._frame % self._rotation_period) / self._rotation_period
-        for dim in range(2):
+        for dim in range(self.ndim):
             self.main_scatters[dim].set_offsets(
                 np.array([
                     self.flattened.times,
-                    np.cos(_t + dim * np.pi / 2) * self.pcs.T[0] + np.sin(_t + dim * np.pi / 2) * self.pcs.T[dim + 1]
+                    np.cos(_t + dim * np.pi / 2) * self.pcs.T[dim] + np.sin(_t + dim * np.pi / 2) * self.pcs.T[dim + 1]
                 ]).T
             )
         for label, node in zip(self.dataset.labels, self.dataset.nodes):
             pcs = self.pcs[self.flattened.labels == label]
-            for dim in range(2):
+            for dim in range(self.ndim):
                 self.scatters[label][dim].set_offsets(
                     np.array([
                         self.flattened.times[self.flattened.labels == label],
-                        np.cos(_t + dim * np.pi / 2) * pcs.T[0] + np.sin(_t + dim * np.pi / 2) * pcs.T[dim + 1]
+                        np.cos(_t + dim * np.pi / 2) * pcs.T[dim] + np.sin(_t + dim * np.pi / 2) * pcs.T[dim + 1]
                     ]).T
                 )
         self._frame += 1
@@ -111,38 +111,27 @@ class TimeseriesPlot(widgets.QFrame):
             self.canvas.draw_idle()
             return
 
-        # FIXME (kevin): there is something funny here happening
-        # when the dataset is updated during an undo (which adds
-        # back in labels that were removed)
         self.scatters = defaultdict(list)
         self.main_scatters = []
 
         self.flattened = self.dataset.flatten(1)
 
-        self.pca = PCA(n_components=3).fit(self.flattened.waveforms)
+        self.pca = PCA(n_components=self.ndim + 1).fit(self.flattened.waveforms)
         self.pcs = self.pca.transform(self.flattened.waveforms)
 
-        self.main_scatters.append(self.ax1.scatter(
-            self.flattened.times,
-            self.pcs.T[0],
-            s=5,
-            alpha=0.8,
-            color="Gray",
-            rasterized=True
-        ))
-        self.main_scatters.append(self.ax2.scatter(
-            self.flattened.times,
-            self.pcs.T[1],
-            s=5,
-            alpha=0.8,
-            color="Gray",
-            rasterized=True
-        ))
+        for dim in range(self.ndim):
+            self.main_scatters.append(self.axes[dim].scatter(
+                self.flattened.times,
+                self.pcs.T[dim],
+                s=5,
+                alpha=0.8,
+                color="Gray",
+                rasterized=True
+            ))
 
-        # FIXME (kevin): colors not getting updated after mass deletion
         for label, node in zip(self.dataset.labels, self.dataset.nodes):
             pcs = self.pcs[self.flattened.labels == label]
-            for dim in range(2):
+            for dim in range(self.ndim):
                 self.scatters[label].append(
                     self.axes[dim].scatter(
                         node.times,

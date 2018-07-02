@@ -1,3 +1,4 @@
+import functools
 import time
 from collections import defaultdict
 from contextlib import contextmanager
@@ -13,6 +14,15 @@ try:
     from MulticoreTSNE import MulticoreTSNE as TSNE
 except ImportError:
     from sklearn.manifold import TSNE
+
+
+def require_loaded(func):
+    @functools.wraps(func)
+    def wrapper(self, *args, **kwargs):
+        if self.loading:
+            return None
+        return func(self, *args, **kwargs)
+    return wrapper
 
 
 class BackgroundTSNE(QObject):
@@ -51,6 +61,7 @@ class TSNEPlot(widgets.QFrame):
         self.last_update = time.time()
         self._tsne = None
         self.main_scatter = None
+        self.last_pos = None
         # For each label, the first is for selected
         # the second is for highighlighted
         self.scatters = defaultdict(list)
@@ -206,6 +217,7 @@ class TSNEPlot(widgets.QFrame):
         layout.addWidget(self.canvas)
         self.setLayout(layout)
 
+    @require_loaded
     def on_cluster_select(self, selected, old_selected):
         for label in self.scatters:
             scat = self.scatters[label][0]
@@ -213,6 +225,7 @@ class TSNEPlot(widgets.QFrame):
 
         self.canvas.draw_idle()
 
+    @require_loaded
     def on_cluster_highlight(self, new_highlight, old_highlight):
         if old_highlight in self.scatters:
             self.scatters[old_highlight][1].set_visible(False)
@@ -221,6 +234,7 @@ class TSNEPlot(widgets.QFrame):
 
         self.canvas.draw_idle()
 
+    @require_loaded
     def _on_leave(self, event):
         self.parent().set_highlight(None)
 
@@ -230,19 +244,34 @@ class TSNEPlot(widgets.QFrame):
         closest_index = dist.argmin()
         return closest_index, dist.flatten()[closest_index]
 
+    @require_loaded
     def _on_hover(self, event):
-        if (time.time() - self.last_update) < 0.1:
+        pos = [event.x, event.y]
+        if not self.last_pos:
+            self.last_pos = pos
+            return
+
+        left_vel = (
+            (self.last_pos[0] - pos[0]) /
+            (time.time() - self.last_update)
+        )
+        self.last_pos = pos
+        if left_vel > 50.0 or time.time() - self.last_update < 0.1:
+            # Suppress highlighting when mouse is moving left
+            # (toward cluster select panel) and when the last
+            # highlighting operation was within 200ms
             return
         self.last_update = time.time()
         closest_idx, dist = self._closest_node(event.xdata, event.ydata)
         if closest_idx == self.parent().highlighted:
             return
-        if dist < 10.0:
+        if dist < 5.0:
             closest_label = self.current_labels[closest_idx]
             self.parent().set_highlight(closest_label)
         else:
             self.parent().set_highlight(None)
 
+    @require_loaded
     def _on_click(self, event):
         label = self.parent().highlighted
         self.parent().toggle_selected(label, label not in self.selected)
