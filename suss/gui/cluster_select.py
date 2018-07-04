@@ -1,18 +1,14 @@
-import os
-import sys
 from functools import partial
-import time
 
 import numpy as np
 from PyQt5 import QtWidgets as widgets
-from PyQt5.QtCore import Qt, QObject, pyqtSignal
+from PyQt5.QtCore import pyqtSignal
 from PyQt5 import QtGui as gui
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.collections import LineCollection
 from matplotlib.figure import Figure
 from matplotlib import ticker
 
-from suss.gui.utils import make_color_map, clear_axes, get_changed_labels
+from suss.gui.utils import clear_axes, get_changed_labels
 
 
 class HoverButton(widgets.QPushButton):
@@ -278,7 +274,11 @@ class ClusterInfo(widgets.QWidget):
         n_bins = 40
         t_max = 0.2
         hist, bin_edges = np.histogram(isi, bins=n_bins, density=True, range=(0, t_max))
-        self.ax_isi.bar((bin_edges[:-1] + bin_edges[1:]) / 2, hist, width=t_max / n_bins, color="Black")
+        self.ax_isi.bar(
+                (bin_edges[:-1] + bin_edges[1:]) / 2,
+                hist,
+                width=t_max / n_bins,
+                color="Black")
         self.ax_isi.text(
                 self.ax_isi.get_xlim()[1] * 0.9,
                 self.ax_isi.get_ylim()[1] * 0.9,
@@ -303,4 +303,3 @@ class ClusterInfo(widgets.QWidget):
         layout = widgets.QVBoxLayout()
         layout.addWidget(self.canvas)
         self.setLayout(layout)
-

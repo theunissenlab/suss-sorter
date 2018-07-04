@@ -5,7 +5,7 @@ from matplotlib import animation
 from sklearn.decomposition import PCA
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 
-from .core import ClusterDataset, SpikeDataset, SubDataset
+from .core import ClusterDataset
 
 
 def _get_square_dims(n):
@@ -15,7 +15,6 @@ def _get_square_dims(n):
     else:
         a = int(np.ceil(root))
         b = (n + a) // a
-	# ugly becuase i cant do math
         if (min(a, b) - 1) * max(a, b) >= n:
             return min(a, b) - 1, max(a, b)
         else:
@@ -51,24 +50,32 @@ def write(ax_or_fig, x, y, text, **kwargs):
 
 
 def waveforms(
-        cluster_dataset,
-        fig=None,
-        color=None,
-        alpha=0.1,
-        width=2,
-        height=2,
-        ylim=(-250, 100),
-        median_color="#dd22dd",
-        median_linewidth=2,
-        axis=True,
-        quick=False,
-    ):
+            cluster_dataset,
+            fig=None,
+            color=None,
+            alpha=0.1,
+            width=2,
+            height=2,
+            ylim=(-250, 100),
+            median_color="#dd22dd",
+            median_linewidth=2,
+            axis=True,
+            quick=False,
+        ):
 
     cols, rows = _get_square_dims(len(cluster_dataset.nodes))
     if fig is None:
-        fig, axes = plt.subplots(rows, cols, figsize=(cols * width, rows * height), frameon=False)
+        fig, axes = plt.subplots(
+                rows,
+                cols,
+                figsize=(cols * width, rows * height),
+                frameon=False)
     else:
-        axes = fig.subplots(rows, cols, figsize=(cols * width, rows * height), frameon=False)
+        axes = fig.subplots(
+                rows,
+                cols,
+                figsize=(cols * width, rows * height),
+                frameon=False)
 
     for ax in axes.flatten():
         ax.spines["top"].set_visible(False)
@@ -80,12 +87,16 @@ def waveforms(
     for cluster, ax in zip(cluster_dataset.nodes, axes.flatten()):
         if quick:
             ax.plot(
-                cluster.flatten().waveforms[::int(len(cluster.flatten().waveforms) / 100) + 1].T,
+                (cluster
+                    .flatten()
+                    .waveforms[::int(len(cluster.flatten().waveforms) / 100) + 1]
+                    .T),
                 color=color,
                 alpha=alpha)
         else:
             ax.plot(cluster.flatten().waveforms.T, color=color, alpha=alpha)
-        ax.plot(cluster.waveform, color=median_color, linewidth=median_linewidth)
+        ax.plot(cluster.waveform, color=median_color,
+                linewidth=median_linewidth)
         ax.set_ylim(*ylim)
 
     return fig, axes
@@ -110,9 +121,9 @@ def animate_2d(
         save_gif: "save animation as a gif" = False,
         save_gif_filename=None,
         save_gif_dpi=100
-    ):
+        ):
     """Generate animated 2d scatter plot with clusters labeled by color
-    
+
     Node should be either a hierarchical node where each child is one cluster,
     or a leaf node (flattened)
     """
@@ -128,8 +139,10 @@ def animate_2d(
     ax = fig.add_axes([0, 0, 1, 1], xlim=xlim, ylim=ylim)
 
     # draw axes just for reference
-    ax.vlines(0, *ax.get_ylim(), linewidth=2, linestyle="dotted", alpha=0.3, color="#222222")
-    ax.hlines(0, *ax.get_xlim(), linewidth=2, linestyle="dotted", alpha=0.3, color="#222222")
+    ax.vlines(0, *ax.get_ylim(), linewidth=2, linestyle="dotted",
+            alpha=0.3, color="#222222")
+    ax.hlines(0, *ax.get_xlim(), linewidth=2, linestyle="dotted",
+            alpha=0.3, color="#222222")
     ax.axis("off")
 
     colors = {}
@@ -137,7 +150,8 @@ def animate_2d(
     for lag in range(n_lags):
         scatter_plots.append({})
         for label in unique_labels:
-            scat = ax.scatter([], [], s=s, alpha=alpha[lag], color=colors.get(label))
+            scat = ax.scatter([], [], s=s, alpha=alpha[lag],
+                    color=colors.get(label))
             scatter_plots[-1][label] = scat
             colors[label] = scat.get_edgecolor()[0]
 
@@ -157,7 +171,11 @@ def animate_2d(
         wf_ax.axis("off")
 
         for label in unique_labels:
-            for lag, frame_idx in zip(range(n_lags), range(frame, max(frame - n_lags, -1), -1)):
+            frame_lags = zip(
+                    range(n_lags),
+                    range(frame, max(frame - n_lags, -1), -1)
+            )
+            for lag, frame_idx in frame_lags:
                 t_start, t_stop, window = windows[frame_idx]
                 if label not in window.labels:
                     scatter_plots[lag][label].set_offsets(np.zeros((0, 2)))
@@ -213,7 +231,7 @@ def time_vs_1d(
         attempt_lda=True,
         fig=None,
         figsize=(10, 2)
-    ):
+        ):
     clusters = list(clusters)
     main_node = ClusterDataset(clusters)
 
@@ -327,7 +345,6 @@ def rotating_visualization(
                 s=[node.waveform_count / 5 for node in dataset.nodes]
             )
 
-
     if ymax is None:
         _ymin, _ymax = ax.get_ylim()
         ymax = max(abs(_ymin), abs(_ymax))
@@ -353,22 +370,24 @@ def rotating_visualization(
         text.set_text("PC1, PC2")
 
         if labels is None:
-            scat.set_offsets(
-                np.hstack([
-                    dataset.times[:, None],
-                    np.sin(t) * data2d[:, to_pc:to_pc + 1] + np.cos(t) * data2d[:, from_pc:from_pc + 1]
-                ])
-            )
-            return scat,
-        else:
-            for label, collection in scatters.items():
-                collection.set_offsets(
-                    np.hstack([
-                        dataset.times[labels == label, None],
-                        np.sin(t) * data2d[labels == label, to_pc:to_pc + 1] + np.cos(t) * data2d[labels == label, from_pc:from_pc + 1]
-                    ])
+            scat.set_offsets(np.hstack([
+                dataset.times[:, None],
+                (
+                    np.sin(t) * data2d[:, to_pc:to_pc + 1] +
+                    np.cos(t) * data2d[:, from_pc:from_pc + 1]
                 )
-            return scatters.values()
+            ]))
+            return scat,
+
+        for label, collection in scatters.items():
+            collection.set_offsets(np.hstack([
+                dataset.times[labels == label, None],
+                (
+                    np.sin(t) * data2d[labels == label, to_pc:to_pc + 1] +
+                    np.cos(t) * data2d[labels == label, from_pc:from_pc + 1]
+                )
+            ]))
+        return scatters.values()
 
     anim = animation.FuncAnimation(
             fig,
@@ -381,7 +400,8 @@ def rotating_visualization(
         if not save_gif_filename:
             print(
                     "Not saving gif because save_gif_filename not specified. "
-                    "Save using anim.save(filename, dpi=dpi, writer='imagemagick')"
+                    "Save using "
+                    "anim.save(filename, dpi=dpi, writer='imagemagick')"
             )
         anim.save(save_gif_filename, dpi=save_gif_dpi, writer="imagemagick")
         print("Saved gif at {}".format(save_gif_filename))
@@ -389,4 +409,3 @@ def rotating_visualization(
     plt.close(fig)
 
     return anim
-    

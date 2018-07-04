@@ -1,18 +1,10 @@
-import os
-import sys
 from collections import defaultdict
-from functools import partial
 
 import numpy as np
 from PyQt5 import QtWidgets as widgets
-from PyQt5.QtCore import Qt, QObject, pyqtSignal
-from PyQt5 import QtGui as gui
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.collections import LineCollection
 from matplotlib.figure import Figure
 from sklearn.decomposition import PCA
-
-from suss.gui.utils import make_color_map, clear_axes
 
 
 class TimeseriesPlot(widgets.QFrame):
@@ -85,23 +77,29 @@ class TimeseriesPlot(widgets.QFrame):
         if not len(self.dataset.nodes) or not self.main_scatters:
             return
 
-        _t = (2 * np.pi) * (self._frame % self._rotation_period) / self._rotation_period
+        _t = (
+                (2 * np.pi) *
+                (self._frame % self._rotation_period) /
+                self._rotation_period
+        )
         for dim in range(self.ndim):
-            self.main_scatters[dim].set_offsets(
-                np.array([
-                    self.flattened.times,
-                    np.cos(_t + dim * np.pi / 2) * self.pcs.T[dim] + np.sin(_t + dim * np.pi / 2) * self.pcs.T[dim + 1]
-                ]).T
-            )
+            self.main_scatters[dim].set_offsets(np.array([
+                self.flattened.times,
+                (
+                    np.cos(_t + dim * np.pi / 2) * self.pcs.T[dim] +
+                    np.sin(_t + dim * np.pi / 2) * self.pcs.T[dim + 1]
+                )
+            ]).T)
         for label, node in zip(self.dataset.labels, self.dataset.nodes):
             pcs = self.pcs[self.flattened.labels == label]
             for dim in range(self.ndim):
-                self.scatters[label][dim].set_offsets(
-                    np.array([
-                        self.flattened.times[self.flattened.labels == label],
-                        np.cos(_t + dim * np.pi / 2) * pcs.T[dim] + np.sin(_t + dim * np.pi / 2) * pcs.T[dim + 1]
-                    ]).T
-                )
+                self.scatters[label][dim].set_offsets(np.array([
+                    self.flattened.times[self.flattened.labels == label],
+                    (
+                        np.cos(_t + dim * np.pi / 2) * pcs.T[dim] +
+                        np.sin(_t + dim * np.pi / 2) * pcs.T[dim + 1]
+                    )
+                ]).T)
         self._frame += 1
         self._frame = self._frame % self._rotation_period
         self.canvas.draw_idle()
@@ -177,4 +175,3 @@ class TimeseriesPlot(widgets.QFrame):
         layout = widgets.QVBoxLayout()
         layout.addWidget(self.canvas)
         self.setLayout(layout)
-

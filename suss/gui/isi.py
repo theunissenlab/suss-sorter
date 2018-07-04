@@ -1,18 +1,7 @@
-import os
-import sys
-from collections import defaultdict
-from functools import partial
-
 import numpy as np
 from PyQt5 import QtWidgets as widgets
-from PyQt5.QtCore import Qt, QObject, QTimer, pyqtSignal
-from PyQt5 import QtGui as gui
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.collections import LineCollection
 from matplotlib.figure import Figure
-from sklearn.decomposition import PCA
-
-from suss.gui.utils import make_color_map, clear_axes, get_changed_labels
 
 
 class ISIPlot(widgets.QFrame):
@@ -55,7 +44,8 @@ class ISIPlot(widgets.QFrame):
         self.ax.patch.set_alpha(0.8)
         self.ax.set_xlim(0, 0.2)
         self.ax.set_xticks([0.001, 0.02])
-        self.ax.set_xticklabels(["1ms", "20ms"],
+        self.ax.set_xticklabels(
+                ["1ms", "20ms"],
                 horizontalalignment="center",
                 fontsize=5)
         for tick in self.ax.get_xaxis().get_major_ticks():
@@ -86,7 +76,8 @@ class ISIPlot(widgets.QFrame):
         self.ax.clear()
         self.ax.set_xlim(0, 0.2)
         self.ax.set_xticks([0.001, 0.02])
-        self.ax.set_xticklabels(["1ms", "20ms"],
+        self.ax.set_xticklabels(
+                ["1ms", "20ms"],
                 horizontalalignment="left",
                 fontsize=5)
         for tick in self.ax.get_xaxis().get_major_ticks():
@@ -137,15 +128,16 @@ class ISIPlot(widgets.QFrame):
                     len(isi[across_clusters])
             )
             self.isi_label.set_text(
-                    "{:.1f}% ISI violations\n{:.1f}% across clusters".format(
+                "{:.1f}% ISI violations\n{:.1f}% across clusters".format(
                     100.0 * isi_violations,
                     100.0 * isi_violations_across
                 )
             )
         else:
             self.isi_label.set_text(
-                    "{:.1f}%\nISI violations".format(
-                    100.0 * isi_violations)
+                "{:.1f}%\nISI violations".format(
+                    100.0 * isi_violations
+                )
             )
 
         self.canvas.draw_idle()
@@ -157,4 +149,3 @@ class ISIPlot(widgets.QFrame):
         layout = widgets.QVBoxLayout()
         layout.addWidget(self.canvas)
         self.setLayout(layout)
-

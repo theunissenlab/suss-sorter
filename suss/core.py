@@ -54,7 +54,8 @@ class BaseDataset(object):
         else:
             source_str = ""
 
-        return "{} with {} {}{}".format(class_str,
+        return "{} with {} {}{}".format(
+                class_str,
                 contains_str,
                 time_str,
                 source_str)
@@ -116,7 +117,8 @@ class BaseDataset(object):
     def select(self, selector):
         """Select by index (not by id!)"""
         selected_subset = self._data[selector]
-        return SubDataset(self,
+        return SubDataset(
+                self,
                 ids=selected_subset["id"],
                 labels=selected_subset["label"])
 
@@ -138,11 +140,13 @@ class BaseDataset(object):
             times = np.arange(0.0, np.max(self.times), dt)
             for t_start in times:
                 t_stop = t_start + dt
-                selector = np.where((self.times >= t_start) & (self.times < t_stop))[0]
+                selector = np.where(
+                        (self.times >= t_start) &
+                        (self.times < t_stop)
+                )[0]
                 yield t_start, t_stop, self.select(selector)
         else:
             raise Exception("Either points or dt must be provided")
-
 
     def flatten(self, depth=None, assign_labels=True):
         if self.is_waveform or (depth is not None and depth == 0):
@@ -153,7 +157,8 @@ class BaseDataset(object):
             for node in self.nodes
         ]
         if not len(bottom_nodes):
-            return self  # FIXME (kevin): this is probably not the right way to handle this
+            # FIXME (kevin): what if there are no nodes but still a source
+            return self
 
         bottom_dataset = bottom_nodes[0].source
         bottom_ids = [node.ids for node in bottom_nodes]
@@ -225,14 +230,15 @@ class ClusterDataset(BaseDataset):
         """Select items by selection array
 
         Args
-            selector: Boolean array with length equal to number of
-                clusters in dataset. Clusters corresponding to True will
-                be kept
-            child: Boolean flag indicating whether link to current dataset
-                should be preserved. If True, the created SubDataset()
-                object refers to this current object as its parent.
-                If False, returns a ClusterDataset with no relation to the
-                current object. Defaults to True.
+            selector: Boolean array with length equal to number
+                of clusters in dataset. Clusters corresponding
+                to True will be kept
+            child: Boolean flag indicating whether link to
+                current dataset should be preserved. If True,
+                the created SubDataset() object refers to this
+                current object as its parent.  If False, returns
+                a ClusterDataset with no relation to the current
+                object. Defaults to True.
 
         Returns
             Either a SubDataset of this ClusterDataset (child=True),
@@ -258,7 +264,8 @@ class ClusterDataset(BaseDataset):
             match = [idx]
 
         if len(match) > 1:
-            raise ValueError("More than one node matched label {}".format(label))
+            raise ValueError("More than one node matched "
+                    "label {}".format(label))
         elif len(match) == 0:
             raise ValueError("No node matched label {}".format(label))
         else:
@@ -273,7 +280,7 @@ class ClusterDataset(BaseDataset):
             start_at = 0
         else:
             start_at = np.max(self.labels)
-            
+
         new_labels = np.arange(
                 start_at + 1,
                 start_at + len(nodes) + 1
@@ -294,7 +301,8 @@ class ClusterDataset(BaseDataset):
             match = [idx]
 
         if len(match) > 1:
-            raise ValueError("More than one node matched label {}".format(label))
+            raise ValueError("More than one node matched "
+                    "label {}".format(label))
         elif len(match) == 0:
             raise ValueError("No node matched label {}".format(label))
         else:
@@ -325,7 +333,8 @@ class ClusterDataset(BaseDataset):
             match = [idx]
 
         if len(match) > 1:
-            raise ValueError("More than one node matched label {}".format(label))
+            raise ValueError("More than one node matched "
+                    "label {}".format(label))
         elif len(match) == 0:
             raise ValueError("No node matched label {}".format(label))
         else:
@@ -343,13 +352,17 @@ class ClusterDataset(BaseDataset):
         return new_dataset
 
     def merge_nodes(self, labels=None, idxs=None, nodes=None):
-        if np.sum([nodes is not None, idxs is not None, labels is not None]) != 1:
-            raise ValueError("Only one of {nodes, idxs, labels} can be provided")
+        if np.sum([
+                nodes is not None,
+                idxs is not None,
+                labels is not None]) != 1:
+            raise ValueError("Only one of {nodes, idxs, labels} "
+                    "can be provided")
         if labels is not None:
             match = np.where(np.isin(self.labels, list(labels)))[0]
-        elif node is not None:
+        elif nodes is not None:
             match = np.where(np.isin(self.nodes, list(nodes)))[0]
-        elif idx is not None:
+        elif idxs is not None:
             match = idxs
 
         selector = np.zeros(len(self)).astype(np.bool)

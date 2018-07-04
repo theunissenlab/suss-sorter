@@ -1,18 +1,7 @@
-import os
-import sys
-from collections import defaultdict
-from functools import partial
-
 import numpy as np
 from PyQt5 import QtWidgets as widgets
-from PyQt5.QtCore import Qt, QObject, QTimer, pyqtSignal
-from PyQt5 import QtGui as gui
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.collections import LineCollection
 from matplotlib.figure import Figure
-from sklearn.decomposition import PCA
-
-from suss.gui.utils import make_color_map, clear_axes, get_changed_labels
 
 
 class WaveformsPlot(widgets.QFrame):
@@ -69,8 +58,6 @@ class WaveformsPlot(widgets.QFrame):
         self.ax.patch.set_alpha(0.8)
         self.highlight_plot = None
 
-        flattened = self.dataset.flatten(1)
-
         for label in selected:
             if label is None:
                 continue
@@ -108,7 +95,7 @@ class WaveformsPlot(widgets.QFrame):
 
         node = self.dataset.nodes[self.dataset.labels == new_highlight][0]
         mean = node.waveform
-        std = np.std(node.waveforms, axis=0)
+        # std = np.std(node.waveforms, axis=0)
 
         if new_highlight is not None and self.highlight_plot is None:
             self.highlight_plot, = self.ax.plot(
@@ -131,4 +118,3 @@ class WaveformsPlot(widgets.QFrame):
         layout = widgets.QVBoxLayout()
         layout.addWidget(self.canvas)
         self.setLayout(layout)
-

@@ -3,17 +3,11 @@ import sys
 from contextlib import contextmanager
 from functools import partial
 
-import numpy as np
 from PyQt5 import QtWidgets as widgets
-from PyQt5.QtCore import Qt, QObject, QTimer, QThread, pyqtSignal
+from PyQt5.QtCore import QTimer, pyqtSignal
 from PyQt5 import QtGui as gui
-from matplotlib import cm
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.collections import LineCollection
-from matplotlib.figure import Figure
 
 import suss.io
-from suss.core import ClusterDataset
 
 from suss.gui.cluster_select import ClusterSelector
 from suss.gui.isi import ISIPlot
@@ -51,9 +45,13 @@ class App(widgets.QMainWindow):
         self.addAction(self.close_action)
 
     def closeEvent(self, event):
-        quit_msg = "Are you sure you want to exit the program?"
-        reply = widgets.QMessageBox.question(self, 'Message',
-                 quit_msg, widgets.QMessageBox.Yes, widgets.QMessageBox.No)
+        quit_msg = "Are you sure you want to quit?\nMake sure any progress is saved."
+        reply = widgets.QMessageBox.question(
+                self,
+                'Message',
+                quit_msg,
+                widgets.QMessageBox.Yes,
+                widgets.QMessageBox.No)
 
         if reply == widgets.QMessageBox.Yes:
             event.accept()
@@ -101,7 +99,7 @@ class App(widgets.QMainWindow):
         self.setCentralWidget(self.suss_viewer)
         self.showMaximized()
         self.show()
-            
+
     def run_file_loader(self):
         options = widgets.QFileDialog.Options()
         options |= widgets.QFileDialog.DontUseNativeDialog
@@ -111,7 +109,7 @@ class App(widgets.QMainWindow):
             ".",
             "(*.pkl)",
             options=options)
-        
+
         if selected_file:
             self.current_file = selected_file
             self.load_dataset(selected_file)
@@ -254,7 +252,7 @@ class SussViewer(widgets.QFrame):
 
     def toggle_selected(self, label, selected):
         """Update selection state by setting a single label's state
-        
+
         Emit signal only if the selection has changed"""
         _old_selected = self.selected.copy()
         if selected and label not in self.selected:
@@ -312,7 +310,6 @@ class SussViewer(widgets.QFrame):
 
         with self.timer_paused():
             last_action, _old_dataset = self.stack.pop()
-            _new_dataset = self.dataset
 
             new_labels = set(self.dataset.labels)
             changed_labels = get_changed_labels(self.dataset, _old_dataset)
@@ -326,7 +323,7 @@ class SussViewer(widgets.QFrame):
             self.UPDATED_CLUSTERS.emit(
                 self.dataset,
                 _old_dataset
-            ) 
+            )
             self.CLUSTER_SELECT.emit(self.selected, _old_selected)
 
     def restore(self, dataset):
@@ -359,7 +356,6 @@ class SussViewer(widgets.QFrame):
                     "Not enough clusters selected to merge")
             return
 
-        old_labels = set(self.dataset.labels)
         _new_dataset = self.dataset.merge_nodes(labels=self.selected)
         new_labels = set(_new_dataset.labels)
         changed_labels = get_changed_labels(_new_dataset, self.dataset)
@@ -369,7 +365,6 @@ class SussViewer(widgets.QFrame):
         self.colors = make_color_map(_new_dataset.labels)
         self._enstack("merge", _new_dataset)
         self.CLUSTER_SELECT.emit(self.selected, _old_selected)
-        # self.dataset_updated()
 
     def _delete(self, to_delete, action="delete"):
         if len(to_delete) == 0:
@@ -433,20 +428,6 @@ class SussViewer(widgets.QFrame):
         # can be computed in the background while the other components
         # are being initialized
 
-        #   ____________________________________
-        #  |____________________________________|
-        #  |      |      |      |       |       |
-        #  |      |      |      |       |       |
-        #  |      |------|------|---------------|
-        #  |      |      |      |               |
-        #  |      |      |      |               |
-        #  |      |      |      |               |
-        #  |      |______|______|_______________|
-        #  |      |                             |
-        #  |      |                             |
-        #  |______|_____________________________|
-        #
-
         # row, col, rowspan, colspan
         layout.addWidget(TSNEPlot(parent=self), 1, 1, 2, 2)
         layout.addWidget(ClusterSelector(parent=self), 1, 0, 3, 1)
@@ -455,7 +436,7 @@ class SussViewer(widgets.QFrame):
         layout.addWidget(TimeseriesPlot(parent=self), 3, 1, 1, 3)
 
         self.setLayout(layout)
-        self.setMinimumSize(1000, 500);
+        self.setMinimumSize(1000, 500)
 
 
 if __name__ == "__main__":
@@ -463,9 +444,11 @@ if __name__ == "__main__":
     try:
         window = App()
     except:
-        recovery_file = "{}.recovery.pkl".format(os.path.basename(window.current_file))
-        print("A horrible error has occured. Saving recovery file at {}".format(recovery_file))
+        recovery_file = "{}.recovery.pkl".format(
+                os.path.basename(window.current_file))
+        print(
+            "A horrible error has occured. "
+            "Saving recovery file at {}".format(recovery_file))
         window.save_dataset(recovery_file)
         raise
     sys.exit(app.exec_())
-
