@@ -36,22 +36,28 @@ class BaseDataset(object):
         self._data = np.array(
             list(zip(times, _order, *col_datas)),
             dtype=([
-                ("time", "float64"),
-                ("id", "int32")
+                ("times", "float64"),
+                ("ids", "int32")
             ] + list(zip(col_names, col_dtypes)))
         )
-        self._data.sort(order="id")
+        self._data.sort(order="ids")
         self.data_column = data_column
 
-        # Set the data_column string as an accessible property
-        def _get_data_column(self):
-            if not self.has_children:
-                return self._data[getattr(self, self.data_column)]
-            else:
-                return np.array([node.centroid for node in self.nodes
-                ])
+    # Set the data_column string as an accessible property
+    def _get_data_column(self):
+        if not self.has_children:
+            return self._data[self.data_column]
+        else:
+            return np.array([node.centroid for node in self.nodes])
 
-        setattr(self, self.data_column, property(_get_data_column))
+    def __getattr__(self, attr):
+        """Allow access of data_column as an attribute"""
+        # hack
+        _get = super().__getattribute__
+        if attr == _get("data_column"):
+            return _get("_get_data_column")()
+
+        return super().__getattr__(attr)
 
     def __len__(self):
         return len(self._data)
@@ -86,7 +92,7 @@ class BaseDataset(object):
 
     @property
     def has_children(self):
-        return "node" in self._data.dtype.names
+        return "nodes" in self._data.dtype.names
 
     @property
     def count(self):
@@ -97,22 +103,22 @@ class BaseDataset(object):
 
     @property
     def times(self):
-        return self._data["time"]
+        return self._data["times"]
 
     @property
     def nodes(self):
         if not self.has_children:
             raise ValueError("Dataset is not clustered; has no 'nodes'")
 
-        return self._data["node"]
+        return self._data["nodes"]
 
     @property
     def labels(self):
-        return self._data["label"]
+        return self._data["labels"]
 
     @property
     def ids(self):
-        return self._data["id"]
+        return self._data["ids"]
 
     @property
     def centroid(self):
@@ -134,10 +140,14 @@ class BaseDataset(object):
     def select(self, selector):
         """Select by index (not by id!)"""
         selected_subset = self._data[selector]
+        if "labels" in selected_subset.dtype.names:
+            labels = selected_subset["labels"]
+        else:
+            labels = None
         return SubDataset(
                 self,
-                ids=selected_subset["id"],
-                labels=selected_subset["label"])
+                ids=selected_subset["ids"],
+                labels=labels)
 
     def merge(self, *nodes):
         ids = np.concatenate([node.ids for node in nodes])
@@ -223,8 +233,8 @@ class ClusterDataset(BaseDataset):
         super().__init__(
             times=[subnode.time for subnode in subnodes],
             data_column=data_column,
-            node=(subnodes, np.object),
-            label=(labels, "int32")
+            nodes=(subnodes, np.object),
+            labels=(labels, "int32")
         )
 
     def select(self, selector, child=True):
@@ -397,9 +407,13 @@ class SubDataset(BaseDataset):
         # http://scipy-cookbook.readthedocs.io/items/ViewsVsCopies.html
         self._data = self.source._data[ids]
         if labels is not None:
-            self._data["label"] = labels
+            self._data["labels"] = labels
         if not all(self.ids[:-1] <= self.ids[1:]):
             self._data.sort(order="id")
+
+    @property
+    def data_column(self):
+        return self.parent.data_column
 
     def merge(self, *nodes):
         """Merge this node with one or more other nodes"""
@@ -467,8 +481,8 @@ class SubDataset(BaseDataset):
         selected_subset = self._data[selector]
         return SubDataset(
                 self.parent,
-                ids=selected_subset["id"],
-                labels=selected_subset["label"],
+                ids=selected_subset["ids"],
+                labels=selected_subset["labels"],
                 source_dataset=self.source
         )
 
@@ -484,6 +498,6 @@ class SpikeDataset(BaseDataset):
         super().__init__(
             times=times,
             data_column="waveforms",
-            waveform=(waveforms, ("float64", waveforms.shape[1])),
-            label=(labels, "int32")
+            waveforms=(waveforms, ("float64", waveforms.shape[1])),
+            labels=(labels, "int32")
         )
