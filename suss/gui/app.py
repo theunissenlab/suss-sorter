@@ -47,16 +47,24 @@ class App(widgets.QMainWindow):
         self.load_shortcut.activated.connect(
             self.run_file_loader)
 
+        self.addAction(self.load_action)
+        self.addAction(self.save_action)
+        self.addAction(self.close_action)
+
+    def closeEvent(self, event):
+        quit_msg = "Are you sure you want to exit the program?"
+        reply = widgets.QMessageBox.question(self, 'Message', 
+                 quit_msg, widgets.QMessageBox.Yes, widgets.QMessageBox.No)
+
+        if reply == widgets.QMessageBox.Yes:
+            event.accept()
+        else:
+            event.ignore()
+
     def init_actions(self):
         self.load_action = widgets.QAction("Load", self)
         self.save_action = widgets.QAction("Save", self)
         self.close_action = widgets.QAction("Exit SussViewer", self)
-        self.select_all_action = widgets.QAction("Select All (Ctrl-a)", self)
-        self.undo_action = widgets.QAction("Undo (Ctrl-z)", self)
-        self.merge_action = widgets.QAction("Merge (Ctrl-m)", self)
-        self.delete_action = widgets.QAction("Delete (Backspace)", self)
-        self.clear_action = widgets.QAction("Clear Selection (Ctrl+c)", self)
-        self.delete_others_action = widgets.QAction("Delete Unselected (Shift+Backspace)", self)
 
         self.load_action.triggered.connect(self.run_file_loader)
         self.save_action.triggered.connect(self.run_file_saver)
@@ -71,14 +79,7 @@ class App(widgets.QMainWindow):
 
         fileMenu.addAction(self.load_action)
         fileMenu.addAction(self.save_action)
-
-        editMenu = mainMenu.addMenu("&Edit")
-        editMenu.addAction(self.select_all_action)
-        editMenu.addAction(self.merge_action)
-        editMenu.addAction(self.delete_action)
-        editMenu.addAction(self.delete_others_action)
-        editMenu.addAction(self.clear_action)
-        editMenu.addAction(self.undo_action)
+        fileMenu.addAction(self.close_action)
 
         self.display_splash()
 
@@ -116,13 +117,6 @@ class App(widgets.QMainWindow):
             self.current_file = selected_file
             self.load_dataset(selected_file)
 
-        self.undo_action.triggered.connect(self.suss_viewer._undo)
-        self.merge_action.triggered.connect(self.suss_viewer.merge)
-        self.delete_action.triggered.connect(self.suss_viewer.delete)
-        self.delete_others_action.triggered.connect(self.suss_viewer.delete_unselected)
-        self.clear_action.triggered.connect(self.suss_viewer.clear)
-        self.select_all_action.triggered.connect(self.suss_viewer.select_all)
-
     def run_file_saver(self):
         if not self.suss_viewer:
             return
@@ -146,9 +140,8 @@ class App(widgets.QMainWindow):
         elif filename.endswith("npy"):
             dataset = suss.io.read_numpy(filename)
 
-        if hasattr(self.suss_viewer, "tsne_plot_widget"):
-            self.suss_viewer.tsne_plot_widget.reset()
-
+        self.title = "SUSS Viewer - {}".format(filename)
+        self.setWindowTitle(self.title)
         # After dataset is loaded, connect the save function
         self.display_suss_viewer(dataset)
 
@@ -204,10 +197,37 @@ class SussViewer(widgets.QFrame):
         self.animation_timer = QTimer()
         self.animation_timer.start(4.0)
 
+        mainMenu = self.parent().menuBar()
+        self.edit_menu = mainMenu.addMenu("&Edit")
+        self.history_menu = mainMenu.addMenu("&History")
+
+        self.init_actions()
         self.init_ui()
         self.setup_shortcuts()
 
         self.UPDATED_CLUSTERS.connect(self.on_dataset_changed)
+
+    def update_menu_bar(self):
+        self.history_menu.clear()
+        for act, dataset in reversed(self.stack):
+            new_action = widgets.QAction("{} (n={})".format(act, len(dataset)), self)
+            new_action.triggered.connect(partial(self.restore, dataset))
+            self.history_menu.addAction(new_action)
+
+    def init_actions(self):
+        self.undo_action = widgets.QAction("Undo (Ctrl-z)", self)
+        self.merge_action = widgets.QAction("Merge (Ctrl-m)", self)
+        self.delete_action = widgets.QAction("Delete (Backspace)", self)
+        self.clear_action = widgets.QAction("Clear Selection (Ctrl+c)", self)
+        self.delete_others_action = widgets.QAction("Delete Unselected (Shift+Backspace)", self)
+        self.select_all_action = widgets.QAction("Select All (Ctrl-a)", self)
+
+        self.undo_action.triggered.connect(self._undo)
+        self.merge_action.triggered.connect(self.merge)
+        self.delete_action.triggered.connect(self.delete)
+        self.delete_others_action.triggered.connect(self.delete_unselected)
+        self.clear_action.triggered.connect(self.clear)
+        self.select_all_action.triggered.connect(self.select_all)
 
     @property
     def dataset(self):
@@ -222,7 +242,7 @@ class SussViewer(widgets.QFrame):
         _old_label = self.highlighted
         self.highlighted = label
         self.CLUSTER_HIGHLIGHT.emit(self.highlighted,
-                _old_label if _old_label else None)
+                _old_label if _old_label is not None else None)
 
     def set_selected(self, selected):
         """Update selection state and emit signal if changed"""
@@ -247,6 +267,7 @@ class SussViewer(widgets.QFrame):
 
     def on_dataset_changed(self):
         self.colors = make_color_map(self.dataset.labels)
+        self.update_menu_bar()
 
     @contextmanager
     def timer_paused(self):
@@ -259,31 +280,37 @@ class SussViewer(widgets.QFrame):
             gui.QKeySequence.Undo, self)
         self.undo_shortcut.activated.connect(
             self._undo)
+        self.window().addAction(self.undo_action)
 
         self.delete_shortcut = widgets.QShortcut(
             gui.QKeySequence("Backspace"), self)
         self.delete_shortcut.activated.connect(
             self.delete)
+        self.window().addAction(self.delete_action)
 
         self.delete_unselected_shortcut = widgets.QShortcut(
             gui.QKeySequence("Shift+Backspace"), self)
         self.delete_unselected_shortcut.activated.connect(
             self.delete_unselected)
+        self.window().addAction(self.delete_others_action)
 
         self.select_all_shortcut = widgets.QShortcut(
             gui.QKeySequence.SelectAll, self)
         self.select_all_shortcut.activated.connect(
             self.select_all)
+        self.window().addAction(self.select_all_action)
 
         self.clear_shortcut = widgets.QShortcut(
             gui.QKeySequence("Ctrl+C"), self)
         self.clear_shortcut.activated.connect(
             self.clear)
+        self.window().addAction(self.clear_action)
 
         self.merge_shortcut = widgets.QShortcut(
             gui.QKeySequence("Ctrl+M"), self)
         self.merge_shortcut.activated.connect(
             self.merge)
+        self.window().addAction(self.merge_action)
 
     def _enstack(self, action, dataset):
         with self.timer_paused():
@@ -318,6 +345,9 @@ class SussViewer(widgets.QFrame):
                 _old_dataset
             ) 
             self.CLUSTER_SELECT.emit(self.selected, _old_selected)
+
+    def restore(self, dataset):
+        self._enstack("restored previous state", dataset)
 
     def reset(self):
         with self.timer_paused():
@@ -395,8 +425,16 @@ class SussViewer(widgets.QFrame):
         _old_selected = self.selected.copy()
         self.selected = set()
         self.CLUSTER_SELECT.emit(self.selected, _old_selected)
+        self.CLUSTER_HIGHLIGHT.emit(None, self.highlighted)
 
     def init_ui(self):
+        self.edit_menu.addAction(self.select_all_action)
+        self.edit_menu.addAction(self.merge_action)
+        self.edit_menu.addAction(self.delete_action)
+        self.edit_menu.addAction(self.delete_others_action)
+        self.edit_menu.addAction(self.clear_action)
+        self.edit_menu.addAction(self.undo_action)
+
         self.on_dataset_changed()
         # self.cluster_selector = ClusterSelector(parent=self)
 

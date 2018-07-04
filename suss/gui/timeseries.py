@@ -17,7 +17,7 @@ from suss.gui.utils import make_color_map, clear_axes
 
 class TimeseriesPlot(widgets.QFrame):
 
-    ndim = 2
+    ndim = 1
 
     def __init__(self, size=(700, 100), parent=None):
         super().__init__(parent)
@@ -143,10 +143,9 @@ class TimeseriesPlot(widgets.QFrame):
                     )
                 )
                 self.scatters[label][-1].set_visible(False)
-        for ax in self.axes:
-            # ax.relim()
-            ax.autoscale_view()
-            ylim = max(*ax.get_ylim())
+
+        for dim, ax in enumerate(self.axes):
+            ylim = np.max(np.abs(self.pcs[:, dim])) * 1.2
             ax.set_ylim(-ylim, ylim)
 
         self.canvas.draw_idle()

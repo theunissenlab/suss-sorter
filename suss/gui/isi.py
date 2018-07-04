@@ -51,7 +51,7 @@ class ISIPlot(widgets.QFrame):
 
         self.ax = fig.add_axes(
                 [0, 0.15, 1, 0.85],
-                facecolor="#111111")
+                facecolor="#C0C0C0")
         self.ax.patch.set_alpha(0.8)
         self.ax.set_xlim(0, 0.03)
         self.ax.set_xticks([0.001, 0.02])
@@ -81,6 +81,8 @@ class ISIPlot(widgets.QFrame):
             return
 
     def on_cluster_select(self, selected, old_selected):
+        if not len(selected):
+            self.isi_label.set_text("")
         self.ax.clear()
         self.ax.set_xlim(0, 0.03)
         self.ax.set_xticks([0.001, 0.02])
@@ -101,7 +103,7 @@ class ISIPlot(widgets.QFrame):
             self.canvas.draw_idle()
             return
 
-        isi_violations = len(np.where(isi < 0.001)) / len(isi)
+        isi_violations = len(np.where(isi < 0.001)[0]) / len(isi)
 
         across_clusters = clusters.labels[:-1] != clusters.labels[1:]
         within_cluster = clusters.labels[:-1] == clusters.labels[1:]
@@ -129,11 +131,22 @@ class ISIPlot(widgets.QFrame):
                 linestyle="--",
                 linewidth=0.5)
 
-        self.isi_label.set_text(
-            "{:.1f}%\nISI violations".format(
-                100.0 * isi_violations
+        if len(isi[across_clusters]):
+            isi_violations_across = (
+                    len(np.where(isi[across_clusters] < 0.001)[0]) /
+                    len(isi[across_clusters])
             )
-        )
+            self.isi_label.set_text(
+                    "{:.1f}%\nISI violations\n{:.1f}% across clusters".format(
+                    100.0 * isi_violations,
+                    100.0 * isi_violations_across
+                )
+            )
+        else:
+            self.isi_label.set_text(
+                    "{:.1f}%\nISI violations".format(
+                    100.0 * isi_violations)
+            )
 
         self.canvas.draw_idle()
 
