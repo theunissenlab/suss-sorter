@@ -175,6 +175,9 @@ def reassign_unassigned(waveforms, labels):
     if len(np.where(labels != -1)[0]) == 0:
         return labels
 
+    if len(np.where(labels == -1)[0]) == 0:
+        return labels
+
     neigh.fit(waveforms[labels != -1], labels[labels != -1])
     labels[np.where(labels == -1)] = neigh.predict(waveforms[np.where(labels == -1)])
     return labels
