@@ -1,4 +1,4 @@
-# SUSS (Single unit spike sorting)
+# SUSS (Semi-aUtomated Spike Sorter)
 
 Semi-automated spike sorting for single channel electrophysiology. Designed for sorting extracellular signals on single channels with non-stationary units (waveforms changing over time).
 
