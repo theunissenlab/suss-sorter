@@ -25,7 +25,9 @@ import suss.io
 from suss.sort import sort
 
 # Load your own spike dataset
-# data = suss.io.read_pickle(...)
+data = suss.io.read_pickle(...)
+
+# Run the sorting algorithm
 sort_result = sort(data.times, data.waveforms)
 
 # Write the output of sorting
