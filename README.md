@@ -56,7 +56,7 @@ This project requires Python3.5+ (I recommend using a virtualenv.)
 
 (with pip)
 ```
-git clone https://github.com/kevinyu/solid-garbanzo.git
+git clone https://github.com/theunissenlab/solid-garbanzo.git
 pip install solid-garbonzo
 
 # uninstall
@@ -65,7 +65,7 @@ pip uninstall suss
 
 (standard)
 ```
-git clone https://github.com/kevinyu/solid-garbanzo.git
+git clone https://github.com/theunissenlab/solid-garbanzo.git
 cd solid-garbonzo
 python setup.py build
 python setup.py install
@@ -77,7 +77,7 @@ python setup.py install
 Separately, install python [virtualenv](https://virtualenv.pypa.io/en/stable/installation/) and make sure you have python3 installed.
 
 ```
-git clone https://github.com/kevinyu/solid-garbanzo.git
+git clone https://github.com/theunissenlab/solid-garbanzo.git
 cd solid-garbanzo
 virtualenv env --python python3
 source bin/activate
