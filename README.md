@@ -23,15 +23,27 @@ Usage example:
 ```python
 import matplotlib.pyplot
 from suss.sort import sort
-sorted_node = sort(times, waveforms, sample_rate=sample_rate)
-for putative_cluster in sorted_node.children:
+sort_result = sort(times, waveforms)
+for putative_cluster in sort_result.nodes:
   plt.plot(putative_cluster.waveforms.T)
 ```
 *Plot waveforms of sorted clusters*
 
+#### Cluster merging (curation)
+
+The output of sort() returns 20 to 40 putative clusters in the dataset. We provide a gui tool to assist in the visual assessment of spike clusters and convenient merging and deletion of clusters.
+
+Run the gui (from within your python environment):
+
+```bash
+python -m suss.gui.app
+```
+
+![SUSS Viewer GUI](static/suss-viewer.gif)
+
 #### Spike detection
 
-TBD
+Not implemented (yet?). Use your favorite spike thresholding / detection method.  
 
 ## Installation and Dependencies
 
