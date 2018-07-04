@@ -117,7 +117,7 @@ class ISIPlot(widgets.QFrame):
                 isi[across_clusters],
                 isi[within_cluster]
             ],
-            bins=50,
+            bins=40,
             density=True,
             range=(0, 0.2),
             stacked=True,
@@ -137,7 +137,7 @@ class ISIPlot(widgets.QFrame):
                     len(isi[across_clusters])
             )
             self.isi_label.set_text(
-                    "{:.1f}%\nISI violations\n{:.1f}% across clusters".format(
+                    "{:.1f}% ISI violations\n{:.1f}% across clusters".format(
                     100.0 * isi_violations,
                     100.0 * isi_violations_across
                 )

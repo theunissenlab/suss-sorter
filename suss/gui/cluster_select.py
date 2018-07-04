@@ -10,6 +10,7 @@ from PyQt5 import QtGui as gui
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.collections import LineCollection
 from matplotlib.figure import Figure
+from matplotlib import ticker
 
 from suss.gui.utils import make_color_map, clear_axes, get_changed_labels
 
@@ -141,6 +142,8 @@ class ClusterSelector(widgets.QScrollArea):
         progress.open()
         self.pixmaps = {}
 
+        wf_ylims = (np.min(self.dataset.waveforms), np.max(self.dataset.waveforms))
+
         for _progress, label_idx in enumerate(ordered_idx):
             cluster_label = self.dataset.labels[label_idx]
             cluster = self.dataset.nodes[label_idx]
@@ -190,6 +193,7 @@ class ClusterSelector(widgets.QScrollArea):
                 plots_widget = ClusterInfo(
                         cluster,
                         self.colors[cluster_label],
+                        ylim=wf_ylims,
                         parent=self)
                 self._cached_cluster_info[cluster_label] = plots_widget
                 cluster_layout.addWidget(plots_widget, 1, 1)
@@ -207,16 +211,17 @@ class ClusterSelector(widgets.QScrollArea):
         self.frame.setLayout(self.layout)
         self.setWidget(self.frame)
         self.setWidgetResizable(True)
-        self.setFixedWidth(420)
+        self.setFixedWidth(350)
 
 
 class ClusterInfo(widgets.QWidget):
 
-    def __init__(self, cluster, color, size=(300, 75), parent=None):
+    def __init__(self, cluster, color, size=(200, 75), ylim=None, parent=None):
         super().__init__(parent)
         self.cluster = cluster
         self.color = color
         self.size = size
+        self.ylim = ylim
 
         self.setup_plots()
         self.setup_data()
@@ -237,7 +242,7 @@ class ClusterInfo(widgets.QWidget):
         self.ax_wf.patch.set_alpha(0.0)
         self.ax_isi = fig.add_axes([0.5, 0, 0.5, 1])
         self.ax_isi.patch.set_alpha(0.0)
-        clear_axes(self.ax_wf, self.ax_isi)
+        clear_axes(self.ax_isi)
 
     def setup_data(self):
         cluster = self.cluster.flatten()
@@ -255,26 +260,22 @@ class ClusterInfo(widgets.QWidget):
                 color=self.color,
                 alpha=1.0,
                 linewidth=2)[0]
-        self.ax_wf.set_ylim(-150, 100)
-        self.ax_wf.hlines(
-                [-100, -50, 0, 50],
-                *self.ax_wf.get_xlim(),
-                color="Black",
-                linestyle="--",
-                linewidth=0.5,
-                alpha=0.5)
-        self.ax_wf.vlines(
-                [10, 20, 30],
-                *self.ax_wf.get_ylim(),
-                color="Black",
-                linestyle="--",
-                linewidth=0.5,
-                alpha=0.5)
+
+        self.ax_wf.yaxis.set_major_locator(ticker.MultipleLocator(base=100))
+        self.ax_wf.xaxis.set_major_locator(ticker.MultipleLocator(base=10))
+        self.ax_wf.grid(True)
+
+        if self.ylim is None:
+            self.ylim = self.ax_wf.get_ylim()
+        else:
+            self.ax_wf.set_ylim(*self.ylim)
 
         isi = np.diff(cluster.times)
         isi_violations = np.sum(isi < 0.001) / len(isi)
-        hist, bin_edges = np.histogram(isi, bins=50, density=True, range=(0, 0.2))
-        self.ax_isi.bar((bin_edges[:-1] + bin_edges[1:]) / 2, hist, width=0.2 / 50, color="Black")
+        n_bins = 40
+        t_max = 0.2
+        hist, bin_edges = np.histogram(isi, bins=n_bins, density=True, range=(0, t_max))
+        self.ax_isi.bar((bin_edges[:-1] + bin_edges[1:]) / 2, hist, width=t_max / n_bins, color="Black")
         self.ax_isi.text(
                 self.ax_isi.get_xlim()[1] * 0.9,
                 self.ax_isi.get_ylim()[1] * 0.9,
@@ -288,7 +289,7 @@ class ClusterInfo(widgets.QWidget):
                 color="Red",
                 linestyle="--",
                 linewidth=0.2)
-        self.ax_isi.set_xlim(0, 0.2)
+        self.ax_isi.set_xlim(0, t_max)
 
         peaks = np.min(cluster.waveforms, axis=1)
         hist, bin_edges = np.histogram(peaks, bins=50, density=True, range=(-200, 0))
