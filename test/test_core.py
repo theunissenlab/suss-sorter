@@ -3,7 +3,12 @@ import unittest
 import numpy as np
 from numpy.testing import assert_array_equal
 
-from suss.core import BaseDataset, ClusterDataset, SpikeDataset
+from suss.core import (
+        BaseDataset,
+        ClusterDataset,
+        SpikeDataset,
+        SubDataset
+)
 
 
 class TestBasicDataset(unittest.TestCase):
@@ -150,3 +155,118 @@ class TestSpikeDataset(unittest.TestCase):
                 dataset.labels,
                 np.array([0, 1, 1, 1])
         )
+
+
+class TestClustering(unittest.TestCase):
+
+    def setUp(self):
+        test_times = np.arange(10)
+        test_waveforms = np.random.random((10, 40))
+        self.dataset = SpikeDataset(test_times, test_waveforms)
+
+        # choosing the labels carefully because the order is important
+        # for the order of the output nodes
+
+        # 4 clusters are [0, 2, 6], [1, 3, 7], [4, 8], [5, 9]
+        self.labels_1 = np.array([0, 1, 0, 1, 2, 3, 0, 1, 2, 3])
+
+        # 2 clusters are [0, 3], [1, 2]
+        # When flattened: [0, 2, 5, 7, 9], [1, 3, 4, 7, 8]
+        self.labels_2 = np.array([0, 9, 9, 0])
+
+    def test_create_subdatasets(self):
+        clustered = self.dataset.cluster(self.labels_1)
+
+        for node in clustered.nodes:
+            self.assertTrue(isinstance(node, SubDataset))
+            self.assertEqual(node.source, self.dataset)
+            self.assertEqual(node.data_column, "waveforms")
+
+    def test_flatten(self):
+        clustered = self.dataset.cluster(self.labels_1)
+        flattened = clustered.flatten()
+
+        self.assertEqual(len(flattened), 10)
+
+        assert_array_equal(self.dataset.ids, flattened.ids)
+        assert_array_equal(self.dataset.waveforms, flattened.waveforms)
+        assert_array_equal(self.dataset.labels, np.zeros(10))
+        assert_array_equal(flattened.labels, self.labels_1)
+
+    def test_hierarchical_cluster(self):
+        clustered_1 = self.dataset.cluster(self.labels_1)
+        clustered_2 = clustered_1.cluster(self.labels_2)
+
+        self.assertEqual(len(clustered_1), 4)
+        self.assertEqual(len(clustered_2), 2)
+
+        assert_array_equal(clustered_1.ids, np.array([0, 1, 2, 3]))
+        assert_array_equal(clustered_1.labels, np.array([0, 1, 2, 3]))
+        assert_array_equal(clustered_2.ids, np.array([0, 1]))
+        assert_array_equal(clustered_2.labels, np.array([0, 9]))
+
+    def test_subnode_ids(self):
+        clustered_1 = self.dataset.cluster(self.labels_1)
+        clustered_2 = clustered_1.cluster(self.labels_2)
+
+        assert_array_equal(clustered_1.nodes[0].ids, np.array([0, 2, 6]))
+        assert_array_equal(clustered_1.nodes[1].ids, np.array([1, 3, 7]))
+        assert_array_equal(clustered_1.nodes[2].ids, np.array([4, 8]))
+        assert_array_equal(clustered_1.nodes[3].ids, np.array([5, 9]))
+
+        assert_array_equal(clustered_2.nodes[0].ids, np.array([0, 3]))
+        assert_array_equal(clustered_2.nodes[1].ids, np.array([1, 2]))
+
+    def test_subnode_labels(self):
+        clustered_1 = self.dataset.cluster(self.labels_1)
+        clustered_2 = clustered_1.cluster(self.labels_2)
+
+        assert_array_equal(clustered_1.nodes[0].labels, np.zeros(3))
+        assert_array_equal(clustered_1.nodes[1].labels, np.zeros(3))
+        assert_array_equal(clustered_1.nodes[2].labels, np.zeros(2))
+        assert_array_equal(clustered_1.nodes[3].labels, np.zeros(2))
+
+        # Test that the second level acquires the labels assigned to
+        # the first level
+        assert_array_equal(clustered_2.nodes[0].labels, np.array([0, 3]))
+        assert_array_equal(clustered_2.nodes[1].labels, np.array([1, 2]))
+
+    def test_flatten_with_depth(self):
+        clustered_1 = self.dataset.cluster(self.labels_1)
+        clustered_2 = clustered_1.cluster(self.labels_2)
+
+        self.assertEqual(len(clustered_1.flatten()), 10)
+        self.assertEqual(len(clustered_2.flatten(1)), 4)
+        self.assertEqual(len(clustered_2.flatten()), 10)
+
+        assert_array_equal(
+                clustered_2.flatten(1).labels,
+                np.array([0, 9, 9, 0])
+        )
+
+        assert_array_equal(
+                clustered_2.flatten().labels,
+                np.array([0, 9, 0, 9, 9, 0, 0, 9, 9, 0])
+        )
+        assert_array_equal(
+                clustered_1.flatten().labels,
+                np.array([0, 1, 0, 1, 2, 3, 0, 1, 2, 3])
+        )
+
+    def test_flatten_subcluster(self):
+        clustered_1 = self.dataset.cluster(self.labels_1)
+        clustered_2 = clustered_1.cluster(self.labels_2)
+
+        # 4 clusters are [0, 2, 6] -> 0, [1, 3, 7] -> 1, [4, 8] -> 2, [5, 9] -> 3
+        # 2 clusters are [0, 3] -> 0, [1, 2] -> 9
+        subcluster = clustered_2.nodes[0]
+        self.assertEqual(subcluster.source, clustered_1)
+        self.assertEqual(subcluster.flatten().source, self.dataset)
+        assert_array_equal(subcluster.flatten().ids, np.array([0, 2, 5, 6, 9]))
+        assert_array_equal(subcluster.ids, np.array([0, 3]))
+
+        subcluster = clustered_2.nodes[1]
+        self.assertEqual(subcluster.source, clustered_1)
+        self.assertEqual(subcluster.flatten().source, self.dataset)
+        assert_array_equal(subcluster.flatten().ids, np.array([1, 3, 4, 7, 8]))
+        assert_array_equal(subcluster.ids, np.array([1, 2]))
