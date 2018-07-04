@@ -37,34 +37,23 @@ class App(widgets.QMainWindow):
         self.setup_shortcuts()
 
     def setup_shortcuts(self):
-        self.save_shortcut = widgets.QShortcut(
-            gui.QKeySequence("Ctrl+S"), self)
-        self.save_shortcut.activated.connect(
-            self.run_file_saver)
+        self.save_action.setShortcut(gui.QKeySequence.Save)
+        self.addAction(self.save_action)
 
-        self.load_shortcut = widgets.QShortcut(
-            gui.QKeySequence("Ctrl+O"), self)
-        self.load_shortcut.activated.connect(
-            self.run_file_loader)
+        self.load_action.setShortcut(gui.QKeySequence.Open)
+        self.addAction(self.load_action)
+
+        self.close_action.setShortcut(gui.QKeySequence.Close)
+        self.addAction(self.close_action)
 
         self.addAction(self.load_action)
         self.addAction(self.save_action)
         self.addAction(self.close_action)
 
-    def closeEvent(self, event):
-        quit_msg = "Are you sure you want to exit the program?"
-        reply = widgets.QMessageBox.question(self, 'Message', 
-                 quit_msg, widgets.QMessageBox.Yes, widgets.QMessageBox.No)
-
-        if reply == widgets.QMessageBox.Yes:
-            event.accept()
-        else:
-            event.ignore()
-
     def init_actions(self):
         self.load_action = widgets.QAction("Load", self)
         self.save_action = widgets.QAction("Save", self)
-        self.close_action = widgets.QAction("Exit SussViewer", self)
+        self.close_action = widgets.QAction("Close", self)
 
         self.load_action.triggered.connect(self.run_file_loader)
         self.save_action.triggered.connect(self.run_file_saver)
@@ -207,6 +196,16 @@ class SussViewer(widgets.QFrame):
 
         self.UPDATED_CLUSTERS.connect(self.on_dataset_changed)
 
+    def closeEvent(self, event):
+        quit_msg = "Are you sure you want to exit the program?"
+        reply = widgets.QMessageBox.question(self, 'Message', 
+                 quit_msg, widgets.QMessageBox.Yes, widgets.QMessageBox.No)
+
+        if reply == widgets.QMessageBox.Yes:
+            event.accept()
+        else:
+            event.ignore()
+
     def update_menu_bar(self):
         self.history_menu.clear()
         for act, dataset in reversed(self.stack):
@@ -215,12 +214,12 @@ class SussViewer(widgets.QFrame):
             self.history_menu.addAction(new_action)
 
     def init_actions(self):
-        self.undo_action = widgets.QAction("Undo (Ctrl-z)", self)
-        self.merge_action = widgets.QAction("Merge (Ctrl-m)", self)
-        self.delete_action = widgets.QAction("Delete (Backspace)", self)
-        self.clear_action = widgets.QAction("Clear Selection (Ctrl+c)", self)
-        self.delete_others_action = widgets.QAction("Delete Unselected (Shift+Backspace)", self)
-        self.select_all_action = widgets.QAction("Select All (Ctrl-a)", self)
+        self.undo_action = widgets.QAction("Undo Action", self)
+        self.merge_action = widgets.QAction("Merge", self)
+        self.delete_action = widgets.QAction("Delete", self)
+        self.clear_action = widgets.QAction("Clear Selection", self)
+        self.delete_others_action = widgets.QAction("Delete All But Selected", self)
+        self.select_all_action = widgets.QAction("Select All", self)
 
         self.undo_action.triggered.connect(self._undo)
         self.merge_action.triggered.connect(self.merge)
@@ -276,40 +275,22 @@ class SussViewer(widgets.QFrame):
         self.animation_timer.start(4.0)
 
     def setup_shortcuts(self):
-        self.undo_shortcut = widgets.QShortcut(
-            gui.QKeySequence.Undo, self)
-        self.undo_shortcut.activated.connect(
-            self._undo)
+        self.undo_action.setShortcut(gui.QKeySequence.Undo)
         self.window().addAction(self.undo_action)
 
-        self.delete_shortcut = widgets.QShortcut(
-            gui.QKeySequence("Backspace"), self)
-        self.delete_shortcut.activated.connect(
-            self.delete)
+        self.delete_action.setShortcut(gui.QKeySequence("Backspace"))
         self.window().addAction(self.delete_action)
 
-        self.delete_unselected_shortcut = widgets.QShortcut(
-            gui.QKeySequence("Shift+Backspace"), self)
-        self.delete_unselected_shortcut.activated.connect(
-            self.delete_unselected)
+        self.delete_others_action.setShortcut(gui.QKeySequence("Shift+Backspace"))
         self.window().addAction(self.delete_others_action)
 
-        self.select_all_shortcut = widgets.QShortcut(
-            gui.QKeySequence.SelectAll, self)
-        self.select_all_shortcut.activated.connect(
-            self.select_all)
+        self.select_all_action.setShortcut(gui.QKeySequence.SelectAll)
         self.window().addAction(self.select_all_action)
 
-        self.clear_shortcut = widgets.QShortcut(
-            gui.QKeySequence("Ctrl+C"), self)
-        self.clear_shortcut.activated.connect(
-            self.clear)
+        self.clear_action.setShortcut(gui.QKeySequence.Copy)
         self.window().addAction(self.clear_action)
 
-        self.merge_shortcut = widgets.QShortcut(
-            gui.QKeySequence("Ctrl+M"), self)
-        self.merge_shortcut.activated.connect(
-            self.merge)
+        self.merge_action.setShortcut(gui.QKeySequence("Ctrl+M"))
         self.window().addAction(self.merge_action)
 
     def _enstack(self, action, dataset):
