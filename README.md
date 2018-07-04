@@ -16,8 +16,6 @@ Prepare your data into arrays of spike waveforms and spike arrival times. The so
 
 `waveforms`: 2-dimensional array of shape (N\_spikes, N\_samples), each row is a spike waveform
 
-`sample_rate`: sampling rate used to generate `waveforms` in Hz
-
 Usage example:
 
 ```python
