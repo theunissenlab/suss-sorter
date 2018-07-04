@@ -453,6 +453,7 @@ class SussViewer(widgets.QFrame):
         layout.addWidget(TimeseriesPlot(parent=self), 3, 1, 1, 3)
 
         self.setLayout(layout)
+        self.setMinimumSize(1000, 500);
 
 
 if __name__ == "__main__":

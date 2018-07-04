@@ -237,9 +237,7 @@ class ClusterInfo(widgets.QWidget):
         self.ax_wf.patch.set_alpha(0.0)
         self.ax_isi = fig.add_axes([0.5, 0, 0.5, 1])
         self.ax_isi.patch.set_alpha(0.0)
-        # self.ax_skew = fig.add_axes([0.66, 0, 0.32, 1])
-        # self.ax_skew.patch.set_alpha(0.0)
-        clear_axes(self.ax_wf, self.ax_isi)# , self.ax_skew)
+        clear_axes(self.ax_wf, self.ax_isi)
 
     def setup_data(self):
         cluster = self.cluster.flatten()
@@ -276,15 +274,7 @@ class ClusterInfo(widgets.QWidget):
         isi = np.diff(cluster.times)
         isi_violations = np.sum(isi < 0.001) / len(isi)
         hist, bin_edges = np.histogram(isi, bins=50, density=True, range=(0, 0.2))
-        self.ax_isi.bar((bin_edges[:-1] + bin_edges[1:]) / 2, hist, width=0.001, color="Black")
-        '''
-        self.ax_isi.hist(
-                isi,
-                bins=50,
-                range=(0, 0.05),
-                density=True,
-                color="Black")
-        '''
+        self.ax_isi.bar((bin_edges[:-1] + bin_edges[1:]) / 2, hist, width=0.2 / 50, color="Black")
         self.ax_isi.text(
                 self.ax_isi.get_xlim()[1] * 0.9,
                 self.ax_isi.get_ylim()[1] * 0.9,
@@ -302,20 +292,7 @@ class ClusterInfo(widgets.QWidget):
 
         peaks = np.min(cluster.waveforms, axis=1)
         hist, bin_edges = np.histogram(peaks, bins=50, density=True, range=(-200, 0))
-        # self.ax_skew.bar(bin_edges[:-1] + 5, hist, width=10, color="Black")
-        '''
-        self.ax_skew.hist(peaks,
-                bins=20,
-                range=(-200, 0),
-                density=True,
-                color="Black")
-        self.ax_skew.vlines(
-                [-100, -50],
-                *self.ax_skew.get_ylim(),
-                color="Black",
-                linestyle=":",
-                alpha=0.2)
-        '''
+
         self.canvas.draw_idle()
 
     def init_ui(self):
