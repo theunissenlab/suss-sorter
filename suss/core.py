@@ -2,14 +2,26 @@ import numpy as np
 
 
 class BaseDataset(object):
-    """Spike dataset of times and waveforms"""
-    def __init__(self, times, **columns):
+    """Dataset of times and raw data (i.e. spike waveforms)"""
+    def __init__(self, times, data_column="datapoints", **columns):
         """
         Args
             times: Array of times
+            data_column: A string used to describe the data being clustered.
+                It it allows direct access to this column of the data
+                through an instance attribute. Defaults to "datapoints".
             **columns: Keywords mapping column names to tuple containing
                 the data to be stored and the dtype. For example,
-                >>> Dataset(times, labels=(np.array([0, 1, 2]), ("int32")))
+                >>> BaseDataset(..., labels=(np.array([0, 1, 2]), ("int32")))
+
+        Example
+        >>> dataset = BaseDataset(
+                times=[1, 2, 3],
+                data_column="cookies",
+                cookies=(np.array([[0, 1], [1, 2], [2, 3]]), ("int32", 2)),
+                labels=(np.array([0, 1, 2]), ("int32"))
+        >>> dataset.cookies
+        [[0, 1], [1, 2], [2, 3]]
         """
         # transfrom columns from dict of {col_name: (col_data, col_dtype), ...}
         # to separate arrays of column names, data, and dtypes
@@ -29,6 +41,17 @@ class BaseDataset(object):
             ] + list(zip(col_names, col_dtypes)))
         )
         self._data.sort(order="id")
+        self.data_column = data_column
+
+        # Set the data_column string as an accessible property
+        def _get_data_column(self):
+            if not self.has_children:
+                return self._data[getattr(self, self.data_column)]
+            else:
+                return np.array([node.centroid for node in self.nodes
+                ])
+
+        setattr(self, self.data_column, property(_get_data_column))
 
     def __len__(self):
         return len(self._data)
@@ -41,12 +64,13 @@ class BaseDataset(object):
 
         time_str = "(time={:.3f}s)".format(self.time)
 
-        if self.is_waveform:
-            contains_str = "{} waveforms".format(len(self._data))
+        if not self.has_children:
+            contains_str = "{} {}".format(len(self._data), self.data_column)
         else:
-            contains_str = "{} clusters and {} waveforms".format(
+            contains_str = "{} clusters and {} {}".format(
                 len(self),
-                self.waveform_count
+                self.count,
+                self.data_column
             )
 
         if self.source != self:
@@ -61,31 +85,24 @@ class BaseDataset(object):
                 source_str)
 
     @property
-    def is_waveform(self):
-        return "waveform" in self._data.dtype.names
+    def has_children(self):
+        return "node" in self._data.dtype.names
 
     @property
-    def waveform_count(self):
-        if self.is_waveform:
+    def count(self):
+        if not self.has_children:
             return len(self.ids)
         else:
-            return np.sum([node.waveform_count for node in self.nodes])
+            return np.sum([node.count for node in self.nodes])
 
     @property
     def times(self):
         return self._data["time"]
 
     @property
-    def waveforms(self):
-        if self.is_waveform:
-            return self._data["waveform"]
-        else:
-            return np.array([node.waveform for node in self.nodes])
-
-    @property
     def nodes(self):
-        if self.is_waveform:
-            raise ValueError("Dataset containing waveforms has no 'nodes'")
+        if not self.has_children:
+            raise ValueError("Dataset is not clustered; has no 'nodes'")
 
         return self._data["node"]
 
@@ -98,9 +115,9 @@ class BaseDataset(object):
         return self._data["id"]
 
     @property
-    def waveform(self):
-        """Representative waveform is the median waveform"""
-        return np.median(self.waveforms, axis=0)
+    def centroid(self):
+        """Representative datapoint is the median"""
+        return np.median(getattr(self, self.data_column), axis=0)
 
     @property
     def time(self):
@@ -126,9 +143,6 @@ class BaseDataset(object):
         ids = np.concatenate([node.ids for node in nodes])
         return self.select(ids)
 
-    def complement(self, node):
-        return self.select(np.delete(self.ids, node.ids))
-
     def windows(self, dt=None, dpoints=None):
         if dpoints is not None and dt is None:
             idxs = np.arange(0, len(self.times), dpoints).astype(np.int)
@@ -149,7 +163,7 @@ class BaseDataset(object):
             raise Exception("Either points or dt must be provided")
 
     def flatten(self, depth=None, assign_labels=True):
-        if self.is_waveform or (depth is not None and depth == 0):
+        if not self.has_children or (depth is not None and depth == 0):
             return self
 
         bottom_nodes = [
@@ -189,28 +203,14 @@ class BaseDataset(object):
                 self.select(cluster_labels == label)
                 for label in unique_labels
             ],
+            data_column=self.data_column,
             labels=unique_labels
-        )
-
-
-class SpikeDataset(BaseDataset):
-
-    def __init__(self, times, waveforms, sample_rate=None, labels=None):
-        self.source = self
-        self.sample_rate = sample_rate
-        if labels is None:
-            labels = np.zeros(len(times))
-
-        super().__init__(
-            times=times,
-            waveform=(waveforms, ("float64", waveforms.shape[1])),
-            label=(labels, "int32")
         )
 
 
 class ClusterDataset(BaseDataset):
 
-    def __init__(self, subnodes, labels=None):
+    def __init__(self, subnodes, data_column="datapoints", labels=None):
         self.source = self
         sources = [subnode.source for subnode in subnodes]
         if sources[1:] != sources[:-1]:
@@ -222,6 +222,7 @@ class ClusterDataset(BaseDataset):
 
         super().__init__(
             times=[subnode.time for subnode in subnodes],
+            data_column=data_column,
             node=(subnodes, np.object),
             label=(labels, "int32")
         )
@@ -250,6 +251,7 @@ class ClusterDataset(BaseDataset):
         else:
             return ClusterDataset(
                 self.nodes[selector],
+                data_column=self.data_column,
                 labels=self.labels[selector]
             )
 
@@ -287,6 +289,7 @@ class ClusterDataset(BaseDataset):
         )
         return ClusterDataset(
             np.concatenate([self.nodes, nodes]),
+            data_column=self.data_column,
             labels=np.concatenate([self.labels, new_labels])
         )
 
@@ -398,10 +401,6 @@ class SubDataset(BaseDataset):
         if not all(self.ids[:-1] <= self.ids[1:]):
             self._data.sort(order="id")
 
-    @property
-    def complement(self):
-        return self.source.complement(self)
-
     def merge(self, *nodes):
         """Merge this node with one or more other nodes"""
         all_nodes = [self] + list(nodes)
@@ -434,7 +433,7 @@ class SubDataset(BaseDataset):
         recursively duplicates all subnodes until the bottom level
         and reassigns their datapoints based on their time
         """
-        if self.is_waveform:
+        if not self.has_children:
             selector = (self.times >= t_start) & (self.times < t_stop)
             return self.split(selector)
 
@@ -449,7 +448,9 @@ class SubDataset(BaseDataset):
             np.ones(len(without))
         ]).astype(np.int)
 
-        clusters = ClusterDataset(np.concatenate([within, without]))
+        clusters = ClusterDataset(
+            np.concatenate([within, without]),
+            data_column=self.data_column)
         clusters = clusters.cluster(labels)
 
         return (
@@ -469,4 +470,20 @@ class SubDataset(BaseDataset):
                 ids=selected_subset["id"],
                 labels=selected_subset["label"],
                 source_dataset=self.source
+        )
+
+
+class SpikeDataset(BaseDataset):
+
+    def __init__(self, times, waveforms, sample_rate=None, labels=None):
+        self.source = self
+        self.sample_rate = sample_rate
+        if labels is None:
+            labels = np.zeros(len(times))
+
+        super().__init__(
+            times=times,
+            data_column="waveforms",
+            waveform=(waveforms, ("float64", waveforms.shape[1])),
+            label=(labels, "int32")
         )

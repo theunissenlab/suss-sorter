@@ -151,7 +151,7 @@ class ClusterSelector(widgets.QScrollArea):
             header_label = widgets.QLabel(
                 "<b>{}</b> (n={}) ({} subclusters)".format(
                     cluster_label,
-                    cluster.waveform_count,
+                    cluster.count,
                     len(cluster.nodes)
                 )
             )

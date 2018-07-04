@@ -95,7 +95,7 @@ def waveforms(
                 alpha=alpha)
         else:
             ax.plot(cluster.flatten().waveforms.T, color=color, alpha=alpha)
-        ax.plot(cluster.waveform, color=median_color,
+        ax.plot(cluster.centroid, color=median_color,
                 linewidth=median_linewidth)
         ax.set_ylim(*ylim)
 
@@ -333,7 +333,7 @@ def rotating_visualization(
                 data2d.T[0],
                 alpha=0.6,
                 color="Black",
-                s=[node.waveform_count / 10 for node in dataset.nodes]
+                s=[node.count / 10 for node in dataset.nodes]
         )
     else:
         scatters = {}
@@ -342,7 +342,7 @@ def rotating_visualization(
                 dataset.times[labels == label],
                 data2d[labels == label].T[0],
                 alpha=0.6,
-                s=[node.waveform_count / 5 for node in dataset.nodes]
+                s=[node.count / 5 for node in dataset.nodes]
             )
 
     if ymax is None:

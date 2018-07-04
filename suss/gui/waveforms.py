@@ -69,7 +69,7 @@ class WaveformsPlot(widgets.QFrame):
                 print("An error occured")
                 print("Couldnt find", label, "in", self.dataset.labels)
                 continue
-            mean = node.waveform
+            mean = node.centroid
             std = np.std(node.waveforms, axis=0)
 
             self.ax.fill_between(
@@ -94,7 +94,7 @@ class WaveformsPlot(widgets.QFrame):
             return
 
         node = self.dataset.nodes[self.dataset.labels == new_highlight][0]
-        mean = node.waveform
+        mean = node.centroid
         # std = np.std(node.waveforms, axis=0)
 
         if new_highlight is not None and self.highlight_plot is None:
