@@ -190,7 +190,7 @@ class BaseDataset(object):
 
 class SpikeDataset(BaseDataset):
 
-    def __init__(self, times, waveforms, sample_rate, labels=None):
+    def __init__(self, times, waveforms, sample_rate=None, labels=None):
         self.source = self
         self.sample_rate = sample_rate
         if labels is None:
