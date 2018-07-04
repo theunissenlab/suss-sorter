@@ -21,11 +21,15 @@ Prepare your data into arrays of spike waveforms and spike arrival times. The so
 Usage example:
 
 ```python
-import matplotlib.pyplot
+import suss.io
 from suss.sort import sort
-sort_result = sort(times, waveforms)
-for putative_cluster in sort_result.nodes:
-  plt.plot(putative_cluster.waveforms.T)
+
+# Load your own spike dataset
+# data = suss.io.read_pickle(...)
+sort_result = sort(data.times, data.waveforms)
+
+# Write the output of sorting
+suss.io.save_pickle(..., sort_result)
 ```
 *Plot waveforms of sorted clusters*
 
@@ -33,7 +37,7 @@ for putative_cluster in sort_result.nodes:
 
 The output of sort() returns 20 to 40 putative clusters in the dataset. We provide a gui tool to assist in the visual assessment of spike clusters and convenient merging and deletion of clusters.
 
-Run the gui (from within your python environment):
+Run the gui (from within your python environment) and load the pickle file saved from using suss.sort:
 
 ```bash
 python -m suss.gui.app
