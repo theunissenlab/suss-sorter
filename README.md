@@ -31,7 +31,6 @@ sort_result = sort(data.times, data.waveforms)
 # Write the output of sorting
 suss.io.save_pickle(..., sort_result)
 ```
-*Plot waveforms of sorted clusters*
 
 #### Cluster merging (curation)
 
