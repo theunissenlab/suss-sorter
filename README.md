@@ -45,7 +45,7 @@ Run the gui (from within your python environment) and load the pickle file saved
 python -m suss.gui.app
 ```
 
-![SUSS Viewer GUI](static/suss-viewer.gif)
+![SUSS Viewer GUI](static/suss-viewer.png)
 
 #### Spike detection
 
@@ -75,6 +75,18 @@ python setup.py install
 ```
 *This should install the package as well as its depenencies*
 
+#### Creating a isolated python virtual environment
+
+Separately, install python [virtualenv](https://virtualenv.pypa.io/en/stable/installation/) and make sure you have python3 installed.
+
+```
+git clone https://github.com/kevinyu/solid-garbanzo.git
+cd solid-garbanzo
+virtualenv env --python python3
+source bin/activate
+pip install -r requirements.txt
+```
+
 #### Other dependencies
 
 * `ffmpeg` for creating HTML5 animated plots in notebooks
@@ -86,8 +98,6 @@ python setup.py install
 Uhhh. TBD.
 
 ## References
-
-Magland JF, Barnett AH. Unimodal clustering using isotonic regression: ISO-SPLIT. arXiv, 2015
 
 Dhawale AK, Poddar R, Wolff BE, Normand VA, Kopelowitz E, Olveczky BP. Automated long-term recording and analysis of neural activity in behaving animals. eLIFE, 2017
 
