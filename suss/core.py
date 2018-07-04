@@ -409,7 +409,7 @@ class SubDataset(BaseDataset):
         if labels is not None:
             self._data["labels"] = labels
         if not all(self.ids[:-1] <= self.ids[1:]):
-            self._data.sort(order="id")
+            self._data.sort(order="ids")
 
     @property
     def data_column(self):
