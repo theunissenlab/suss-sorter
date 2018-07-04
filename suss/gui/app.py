@@ -50,6 +50,16 @@ class App(widgets.QMainWindow):
         self.addAction(self.save_action)
         self.addAction(self.close_action)
 
+    def closeEvent(self, event):
+        quit_msg = "Are you sure you want to exit the program?"
+        reply = widgets.QMessageBox.question(self, 'Message',
+                 quit_msg, widgets.QMessageBox.Yes, widgets.QMessageBox.No)
+
+        if reply == widgets.QMessageBox.Yes:
+            event.accept()
+        else:
+            event.ignore()
+
     def init_actions(self):
         self.load_action = widgets.QAction("Load", self)
         self.save_action = widgets.QAction("Save", self)
@@ -196,16 +206,6 @@ class SussViewer(widgets.QFrame):
 
         self.UPDATED_CLUSTERS.connect(self.on_dataset_changed)
 
-    def closeEvent(self, event):
-        quit_msg = "Are you sure you want to exit the program?"
-        reply = widgets.QMessageBox.question(self, 'Message', 
-                 quit_msg, widgets.QMessageBox.Yes, widgets.QMessageBox.No)
-
-        if reply == widgets.QMessageBox.Yes:
-            event.accept()
-        else:
-            event.ignore()
-
     def update_menu_bar(self):
         self.history_menu.clear()
         for act, dataset in reversed(self.stack):
@@ -239,6 +239,8 @@ class SussViewer(widgets.QFrame):
     def set_highlight(self, label):
         """Update highlight state and emit signal"""
         _old_label = self.highlighted
+        if label == _old_label:
+            return
         self.highlighted = label
         self.CLUSTER_HIGHLIGHT.emit(self.highlighted,
                 _old_label if _old_label is not None else None)

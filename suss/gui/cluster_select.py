@@ -129,6 +129,12 @@ class ClusterSelector(widgets.QScrollArea):
         ordered_idx = reversed(np.argsort(self.dataset.labels))
 
         self.layout = widgets.QVBoxLayout(self)
+        self.pixmaps = {}
+
+        if not len(self.dataset):
+            return
+
+        wf_ylims = (np.min(self.dataset.waveforms), np.max(self.dataset.waveforms))
 
         progress = widgets.QProgressDialog(
                 "Loading {} clusters".format(
@@ -140,9 +146,6 @@ class ClusterSelector(widgets.QScrollArea):
                 self)
         progress.setMinimumDuration(2000)
         progress.open()
-        self.pixmaps = {}
-
-        wf_ylims = (np.min(self.dataset.waveforms), np.max(self.dataset.waveforms))
 
         for _progress, label_idx in enumerate(ordered_idx):
             cluster_label = self.dataset.labels[label_idx]

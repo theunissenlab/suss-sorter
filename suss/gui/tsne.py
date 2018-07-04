@@ -15,6 +15,8 @@ try:
 except ImportError:
     from sklearn.manifold import TSNE
 
+from suss.gui.utils import require_dataset
+
 
 def require_loaded(func):
     @functools.wraps(func)
@@ -88,6 +90,7 @@ class TSNEPlot(widgets.QFrame):
     def selected(self):
         return self.parent().selected
 
+    @require_dataset
     def run_tsne_background(self):
         self.loading = True
         self.base_dataset = self.dataset
@@ -166,15 +169,14 @@ class TSNEPlot(widgets.QFrame):
         self.ax.patch.set_alpha(0.8)
 
     def setup_data(self):
-        if self._tsne is None or not len(self.dataset.nodes):
-            self.canvas.draw_idle()
-            return
-
         self.scatters = defaultdict(list)
-
         self.flattened = self.dataset.flatten(1)
         self.current_idx = self.flattened.ids
         self.current_labels = self.flattened.labels
+
+        if self._tsne is None or not len(self.dataset.nodes):
+            self.canvas.draw_idle()
+            return
 
         tsne = self.tsne()
 
@@ -225,6 +227,7 @@ class TSNEPlot(widgets.QFrame):
 
         self.canvas.draw_idle()
 
+    @require_dataset
     @require_loaded
     def on_cluster_highlight(self, new_highlight, old_highlight):
         if old_highlight in self.scatters:
@@ -244,6 +247,7 @@ class TSNEPlot(widgets.QFrame):
         closest_index = dist.argmin()
         return closest_index, dist.flatten()[closest_index]
 
+    @require_dataset
     @require_loaded
     def _on_hover(self, event):
         pos = [event.x, event.y]
@@ -273,5 +277,6 @@ class TSNEPlot(widgets.QFrame):
 
     @require_loaded
     def _on_click(self, event):
-        label = self.parent().highlighted
+        closest_idx, dist = self._closest_node(event.xdata, event.ydata)
+        label = self.current_labels[closest_idx]
         self.parent().toggle_selected(label, label not in self.selected)

@@ -1,3 +1,5 @@
+import functools
+
 import numpy as np
 from matplotlib import cm
 
@@ -33,3 +35,12 @@ def get_changed_labels(new_dataset, old_dataset):
             changed_labels.add(label)
 
     return changed_labels
+
+
+def require_dataset(func):
+    @functools.wraps(func)
+    def wrapper(self, *args, **kwargs):
+        if not hasattr(self, "dataset") or not len(self.dataset):
+            return None
+        return func(self, *args, **kwargs)
+    return wrapper
