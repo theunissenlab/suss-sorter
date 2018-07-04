@@ -1,0 +1,14 @@
+#!/usr/bin/env python
+
+import os
+import sys
+import suss.io
+from suss.sort import sort
+
+
+path = sys.argv[1]
+filename, ext = os.path.splitext(path)
+dataset = suss.io.read_pickle(path)
+sort_result = sort(dataset.times, dataset.waveforms)
+
+suss.io.save_pickle("{}-sorted{}".format(filename, ext), sort_result)
