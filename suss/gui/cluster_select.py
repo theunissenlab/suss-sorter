@@ -233,13 +233,13 @@ class ClusterInfo(widgets.QWidget):
         self.canvas = FigureCanvas(fig)
         self.canvas.setFixedSize(*self.size)
         self.canvas.setStyleSheet("background-color:transparent;")
-        self.ax_wf = fig.add_axes([0.0, 0, 0.32, 1])
+        self.ax_wf = fig.add_axes([0.0, 0, 0.5, 1])
         self.ax_wf.patch.set_alpha(0.0)
-        self.ax_isi = fig.add_axes([0.33, 0, 0.32, 1])
+        self.ax_isi = fig.add_axes([0.5, 0, 0.5, 1])
         self.ax_isi.patch.set_alpha(0.0)
-        self.ax_skew = fig.add_axes([0.66, 0, 0.32, 1])
-        self.ax_skew.patch.set_alpha(0.0)
-        clear_axes(self.ax_wf, self.ax_isi, self.ax_skew)
+        # self.ax_skew = fig.add_axes([0.66, 0, 0.32, 1])
+        # self.ax_skew.patch.set_alpha(0.0)
+        clear_axes(self.ax_wf, self.ax_isi)# , self.ax_skew)
 
     def setup_data(self):
         cluster = self.cluster.flatten()
@@ -275,8 +275,8 @@ class ClusterInfo(widgets.QWidget):
 
         isi = np.diff(cluster.times)
         isi_violations = np.sum(isi < 0.001) / len(isi)
-        hist, bin_edges = np.histogram(isi, bins=30, density=True, range=(0, 0.03))
-        self.ax_isi.bar(bin_edges[:-1] + 0.0005, hist, width=0.001, color="Black")
+        hist, bin_edges = np.histogram(isi, bins=50, density=True, range=(0, 0.2))
+        self.ax_isi.bar((bin_edges[:-1] + bin_edges[1:]) / 2, hist, width=0.001, color="Black")
         '''
         self.ax_isi.hist(
                 isi,
@@ -297,25 +297,25 @@ class ClusterInfo(widgets.QWidget):
                 *self.ax_isi.get_ylim(),
                 color="Red",
                 linestyle="--",
-                linewidth=0.5)
-        self.ax_isi.set_xlim(0, 0.03)
+                linewidth=0.2)
+        self.ax_isi.set_xlim(0, 0.2)
 
         peaks = np.min(cluster.waveforms, axis=1)
-        hist, bin_edges = np.histogram(peaks, bins=20, density=True, range=(-200, 0))
-        self.ax_skew.bar(bin_edges[:-1] + 5, hist, width=10, color="Black")
+        hist, bin_edges = np.histogram(peaks, bins=50, density=True, range=(-200, 0))
+        # self.ax_skew.bar(bin_edges[:-1] + 5, hist, width=10, color="Black")
         '''
         self.ax_skew.hist(peaks,
                 bins=20,
                 range=(-200, 0),
                 density=True,
                 color="Black")
-        '''
         self.ax_skew.vlines(
                 [-100, -50],
                 *self.ax_skew.get_ylim(),
                 color="Black",
                 linestyle=":",
                 alpha=0.2)
+        '''
         self.canvas.draw_idle()
 
     def init_ui(self):

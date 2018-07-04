@@ -53,7 +53,7 @@ class ISIPlot(widgets.QFrame):
                 [0, 0.15, 1, 0.85],
                 facecolor="#C0C0C0")
         self.ax.patch.set_alpha(0.8)
-        self.ax.set_xlim(0, 0.03)
+        self.ax.set_xlim(0, 0.2)
         self.ax.set_xticks([0.001, 0.02])
         self.ax.set_xticklabels(["1ms", "20ms"],
                 horizontalalignment="center",
@@ -84,7 +84,7 @@ class ISIPlot(widgets.QFrame):
         if not len(selected):
             self.isi_label.set_text("")
         self.ax.clear()
-        self.ax.set_xlim(0, 0.03)
+        self.ax.set_xlim(0, 0.2)
         self.ax.set_xticks([0.001, 0.02])
         self.ax.set_xticklabels(["1ms", "20ms"],
                 horizontalalignment="left",
@@ -117,9 +117,9 @@ class ISIPlot(widgets.QFrame):
                 isi[across_clusters],
                 isi[within_cluster]
             ],
-            bins=30,
+            bins=50,
             density=True,
-            range=(0, 0.03),
+            range=(0, 0.2),
             stacked=True,
             alpha=0.8,
             color=["Orange", "Black"]
