@@ -441,8 +441,9 @@ class SussViewer(widgets.QFrame):
 
 if __name__ == "__main__":
     app = widgets.QApplication(sys.argv)
+    window = App()
     try:
-        window = App()
+        result = app.exec_()
     except:
         recovery_file = "{}.recovery.pkl".format(
                 os.path.basename(window.current_file))
@@ -451,4 +452,4 @@ if __name__ == "__main__":
             "Saving recovery file at {}".format(recovery_file))
         window.save_dataset(recovery_file)
         raise
-    sys.exit(app.exec_())
+    sys.exit(result)
