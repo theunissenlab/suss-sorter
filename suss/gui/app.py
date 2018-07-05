@@ -93,24 +93,28 @@ class App(widgets.QMainWindow):
 
         self.display_splash()
 
-        rect = self.frameGeometry()
-        center = widgets.QDesktopWidget().availableGeometry().center()
-        rect.moveCenter(center)
+    def _center_on(self, w):
+        rect = w.frameGeometry()
+        geom = widgets.QDesktopWidget().availableGeometry()
+        center_on = geom.center()
+        center_on.setY(center_on.y() - geom.height() / 8)
+        rect.moveCenter(center_on)
         self.move(rect.topLeft())
-        self.show()
 
     def display_splash(self):
         self.splash = Splash(self)
         self.setCentralWidget(self.splash)
         self.splash.main_button.clicked.connect(self.run_file_loader)
         self.splash.quit_button.clicked.connect(self.close)
+        self._center_on(self.splash)
+        self.show()
 
     def display_suss_viewer(self, dataset):
         if self.suss_viewer:
             self.CLOSING_DATASET.emit()
         self.suss_viewer = SussViewer(dataset, self)
         self.setCentralWidget(self.suss_viewer)
-        self.showMaximized()
+        self._center_on(self.suss_viewer)
         self.show()
 
     def run_file_loader(self):
@@ -178,6 +182,7 @@ class Splash(widgets.QWidget):
         layout.addWidget(self.main_button)
         layout.addWidget(self.quit_button)
         self.setLayout(layout)
+        self.setMinimumSize(300, 100)
 
 
 class SussViewer(widgets.QFrame):
@@ -189,6 +194,8 @@ class SussViewer(widgets.QFrame):
     for the current dataset state, the currently selected clusters,
     and the currently highlighted cluster.
     """
+
+    minimum_size = (1000, 500)
 
     # Emits the new dataset object and the old dataset object
     UPDATED_CLUSTERS = pyqtSignal(object, object)
@@ -455,7 +462,7 @@ class SussViewer(widgets.QFrame):
         layout.addWidget(TimeseriesPlot(parent=self), 3, 1, 1, 3)
 
         self.setLayout(layout)
-        self.setMinimumSize(1000, 500)
+        self.setMinimumSize(*self.minimum_size)
 
 
 if __name__ == "__main__":
