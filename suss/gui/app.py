@@ -24,6 +24,7 @@ class App(widgets.QMainWindow):
 
     def __init__(self):
         super().__init__()
+        self._closing = False
         self.title = "SUSS Viewer"
         self.suss_viewer = None
         self.init_actions()
@@ -45,6 +46,17 @@ class App(widgets.QMainWindow):
         self.addAction(self.close_action)
 
     def closeEvent(self, event):
+        skip_confirmation = (
+                # Workaround for PyQt closeEvent being called twice bug
+                # See: https://bugreports.qt.io/browse/QTBUG-43344
+                self._closing == True or
+                not self.suss_viewer or
+                len(self.suss_viewer.stack) == 1
+        )
+        if skip_confirmation:
+            event.accept()
+            return
+
         quit_msg = "Are you sure you want to quit?\nMake sure any progress is saved."
         reply = widgets.QMessageBox.question(
                 self,
@@ -54,6 +66,7 @@ class App(widgets.QMainWindow):
                 widgets.QMessageBox.No)
 
         if reply == widgets.QMessageBox.Yes:
+            self._closing = True
             event.accept()
         else:
             event.ignore()
@@ -194,15 +207,21 @@ class SussViewer(widgets.QFrame):
         self.animation_timer = QTimer()
         self.animation_timer.start(4.0)
 
-        mainMenu = self.parent().menuBar()
-        self.edit_menu = mainMenu.addMenu("&Edit")
-        self.history_menu = mainMenu.addMenu("&History")
+        main_menu = self.parent().menuBar()
+        self.edit_menu = main_menu.addMenu("&Edit")
+        self.history_menu = main_menu.addMenu("&History")
 
         self.init_actions()
         self.init_ui()
         self.setup_shortcuts()
 
         self.UPDATED_CLUSTERS.connect(self.on_dataset_changed)
+        self.parent().CLOSING_DATASET.connect(self.on_close_dataset)
+
+    def on_close_dataset(self):
+        main_menu = self.parent().menuBar()
+        main_menu.removeAction(self.edit_menu.menuAction())
+        main_menu.removeAction(self.history_menu.menuAction())
 
     def update_menu_bar(self):
         self.history_menu.clear()

@@ -91,6 +91,7 @@ class WaveformsPlot(widgets.QFrame):
         if new_highlight is None:
             if self.highlight_plot is not None:
                 self.highlight_plot.set_visible(False)
+            self.canvas.draw_idle()
             return
 
         node = self.dataset.nodes[self.dataset.labels == new_highlight][0]
