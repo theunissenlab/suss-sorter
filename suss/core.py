@@ -57,7 +57,7 @@ class BaseDataset(object):
         if attr == _get("data_column"):
             return _get("_get_data_column")()
 
-        return super().__getattr__(attr)
+        return _get(attr)
 
     def __len__(self):
         return len(self._data)
@@ -410,10 +410,7 @@ class SubDataset(BaseDataset):
             self._data["labels"] = labels
         if not all(self.ids[:-1] <= self.ids[1:]):
             self._data.sort(order="ids")
-
-    @property
-    def data_column(self):
-        return self.parent.data_column
+        self.data_column = self.parent.data_column
 
     def merge(self, *nodes):
         """Merge this node with one or more other nodes"""
