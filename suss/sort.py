@@ -3,9 +3,9 @@ import time
 import hdbscan
 import numpy as np
 import scipy.stats
-from sklearn.cluster import KMeans
+from sklearn.cluster import MiniBatchKMeans as KMeans
 from sklearn.decomposition import PCA
-from sklearn.neighbors import KNeighborsClassifier
+from sklearn.neighbors import KNeighborsClassifier, NearestNeighbors
 
 try:
     from MulticoreTSNE import MulticoreTSNE as TSNE
@@ -20,6 +20,7 @@ def cluster_step(
         dpoints=None,
         n_components=2,
         mode="kmeans",
+        min_cluster_size=10,
         transform=None):
     """Implement a first step of the hierarchical clustering algorithm
 
@@ -62,7 +63,7 @@ def cluster_step(
         labels = clusterer.predict(window_data)
 
         for label, count in zip(*np.unique(labels, return_counts=True)):
-            if count < 10:
+            if count < min_cluster_size:
                 labels[labels == label] = -1
             else:
                 labels[labels == label] += np.max(_new_labels) + 1
@@ -108,6 +109,7 @@ def denoise_step(
         current_node.flatten(),
         dpoints=dpoints,
         n_components=n_components,
+        min_cluster_size=min_waveforms,
         mode=mode
     )
 
@@ -133,8 +135,9 @@ def denoising_sort(times, waveforms):
     original_waveforms = spike_dataset.waveforms.copy()
 
     steps = [
-        dict(min_waveforms=2, dpoints=1000, n_components=32, mode="kmeans"),
-        dict(min_waveforms=15, dpoints=2000, n_components=16, mode="kmeans"),
+        dict(min_waveforms=20, dpoints=1000, n_components=30, mode="kmeans"),
+        # dict(min_waveforms=30, dpoints=1000, n_components=20, mode="kmeans"),
+        # dict(min_waveforms=15, dpoints=2000, n_components=16, mode="kmeans"),
     ]
 
     dataset = spike_dataset
@@ -150,31 +153,168 @@ def denoising_sort(times, waveforms):
     return denoised_node
 
 
-def sort(times, waveforms):
-    denoised = denoising_sort(times, waveforms)
-    tsned = TSNE(n_components=2).fit_transform(
-        PCA(n_components=20).fit_transform(denoised.waveforms)
-    )
+def isi(node):
+    dt = np.diff(node.flatten().times)
+    return np.sum(dt < 0.001) / len(dt)
 
-    # Now perform another TSNE, incorporating time
-    time_arr = denoised.times / (60.0 * 60.0)  # divide by 1 hr
-    time_arr = time_arr - np.mean(time_arr)
+
+def cluster_quality(data, labels, n_neighbors=20):
+    neighbors = NearestNeighbors(
+        n_neighbors=n_neighbors,
+        algorithm="ball_tree"
+    ).fit(data)
+
+    _, indices = neighbors.kneighbors(data)
+    quality = {}
+    for label in np.unique(labels):
+        cluster_size = len(np.where(labels == label)[0])
+        take_n = min(n_neighbors, cluster_size)
+        neighbor_idx = indices[labels == label, 1:take_n]
+        has_bad_neighbor = np.any(labels[neighbor_idx] == label, axis=1)
+        quality[label] = {
+            "count": cluster_size,
+            "isolation": np.mean(has_bad_neighbor)
+        }
+
+    return quality
+
+
+def get_flippable_points(data, labels, n_neighbors=10):
+    neighbors = NearestNeighbors(
+        n_neighbors=n_neighbors,
+        algorithm="ball_tree"
+    ).fit(data)
+
+    _, indices = neighbors.kneighbors(data)
+    return np.array([
+        np.mean(labels[indices[idx, 1:]] != label) > 0.5
+        for idx, label in enumerate(labels)
+    ])
+
+
+def cleanup_clusters(data, labels, n_neighbors=20):
+    cleaner = KNeighborsClassifier(n_neighbors=n_neighbors)
+    cleaner.fit(data, labels)
+    labels = cleaner.predict(data)
+    return labels
+
+
+def flip_points(data, labels, flippable, n_neighbors=10, create_labels=False):
+    if len(flippable) == 0:
+        return labels
+    if create_labels:
+        hdb = hdbscan.HDBSCAN(min_cluster_size=3)
+        potential_labels = hdb.fit_predict(data[flippable])
+        if -1 in potential_labels:
+            potential_labels = reassign_unassigned(
+                    data[flippable],
+                    potential_labels)
+        labels[flippable] = np.max(labels) + potential_labels + 1
+        return cleanup_clusters(data, labels, n_neighbors=n_neighbors)
+    else:
+        replacer = KNeighborsClassifier(n_neighbors=n_neighbors)
+        replacer.fit(data, labels)
+        replacement_probs = replacer.predict_proba(data[flippable])
+
+        _flippable_classes = np.isin(replacer.classes_, np.unique(labels[flippable]))
+        classes = replacer.classes_[_flippable_classes]
+        replacement_labels = classes[
+            np.argmax(replacement_probs[:, _flippable_classes], axis=1)
+        ]
+        labels[flippable] = replacement_labels
+        return labels
+
+
+def tsne_time(dataset, perplexity=30, t_scale=30 * 60 * 60, pcs=12):
+    tsned = TSNE(n_components=2, perplexity=perplexity).fit_transform(
+        PCA(n_components=pcs).fit_transform(dataset.waveforms)
+    )
     wf_arr = scipy.stats.zscore(tsned, axis=0)
+    t_arr = dataset.times / t_scale
+    t_arr = t_arr - np.mean(t_arr)
 
-    tsned_with_time = TSNE(n_components=2).fit_transform(
-        np.hstack([wf_arr, time_arr[:, None]])
+    return TSNE(n_components=2, perplexity=perplexity).fit_transform(
+        np.hstack([wf_arr, t_arr[:, None]])
     )
 
-    # Try different clusterings until the number of clusters falls
-    # within our desired range
-    # TODO (kevin): improve this selection
-    for n in range(20, 4, -2):
-        hdb = hdbscan.HDBSCAN(min_cluster_size=n)
-        final_labels = hdb.fit_predict(tsned_with_time)
-        if 20 <= len(np.unique(final_labels)) <= 40:
-            print("Selected min_cluster_size={}".format(n))
+
+def is_isolated(labels, quality_dict, min_count=12, min_isolation=0.99):
+    return np.array([
+        (
+            (min_count <= quality_dict[label]["count"]) and
+            (min_isolation <= quality_dict[label]["isolation"])
+        ) for label in labels
+    ])
+
+
+def whittle(dataset, n=10):
+    """Whittle down a dataset to find isolated clusters
+    """
+    temp_dataset = dataset
+    final_labels = -1 * np.ones(len(dataset)).astype(np.int)
+    for idx in range(n):
+        mask = final_labels == -1
+
+        if np.sum(mask) < 100:
             break
 
-    final_labels = reassign_unassigned(tsned_with_time, final_labels)
+        temp_dataset = dataset.select(mask)
+        tsned = tsne_time(temp_dataset)
 
-    return denoised.cluster(final_labels)
+        hdb = hdbscan.HDBSCAN(min_cluster_size=3)
+        labels = hdb.fit_predict(tsned)
+        if -1 in labels:
+            labels = reassign_unassigned(tsned, labels)
+
+        quality = cluster_quality(tsned, labels)
+        isolated = is_isolated(labels, quality)
+        labels[np.logical_not(isolated)] = -1
+        labels[labels != -1] += np.max(final_labels) + 1
+        final_labels[mask] = labels
+
+    result = dataset.cluster(final_labels)
+    return result.select(
+            [isi(n) < 0.05 for n in result.nodes],
+            child=False)
+
+
+def denoise(times, waveforms):
+    denoised = denoising_sort(times, waveforms)
+    denoised = denoised.select([isi(n) < 0.05 for n in denoised.nodes])
+
+    denoised = cluster_step(
+        denoised,
+        dpoints=200,
+        n_components=20,
+        min_cluster_size=5,
+        mode="kmeans"
+    )
+    denoised = denoised.select([isi(n) < 0.05 for n in denoised.nodes])
+    return denoised
+
+
+def sort(denoised):
+    whittled = whittle(denoised)
+
+    flat = whittled.flatten(1)
+    tsned = tsne_time(flat)
+    labels = flat.labels
+
+    labels = cleanup_clusters(tsned, labels, n_neighbors=20)
+    labels = cleanup_clusters(tsned, labels, n_neighbors=10)
+
+    # Not sure if the next few lines help
+    flippable = get_flippable_points(tsned, labels)
+    labels = flip_points(tsned, labels, flippable, create_labels=True)
+    labels = cleanup_clusters(tsned, labels, n_neighbors=20)
+
+    counts = dict(
+            (label, np.sum(labels == label))
+            for label in np.unique(labels)
+    )
+    flippable = [counts[label] < 10 for label in labels]
+    if np.any(flippable):
+        labels = flip_points(tsned, labels, flippable)
+    labels = cleanup_clusters(tsned, labels, n_neighbors=20)
+
+    return tsned, flat.cluster(labels)
