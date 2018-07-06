@@ -102,7 +102,7 @@ class ClusterSelector(widgets.QScrollArea):
             button.setChecked(label in selected)
 
     def on_cluster_highlight(self, new_highlight, old_highlight):
-        if old_highlight and old_highlight in self.panels:
+        if old_highlight is not None and old_highlight in self.panels:
             self.panels[old_highlight].setFrameShape(widgets.QFrame.NoFrame)
 
         if new_highlight is None:
@@ -162,7 +162,7 @@ class ClusterSelector(widgets.QScrollArea):
             header.addWidget(check_button)
             header.addWidget(header_label)
 
-            pixmap = gui.QPixmap(8, 60)
+            pixmap = gui.QPixmap(30, 60)
             pixmap.fill(gui.QColor(*[
                 255 * c
                 for c in self.colors[cluster_label]
@@ -170,11 +170,14 @@ class ClusterSelector(widgets.QScrollArea):
             self.pixmaps[cluster_label] = pixmap
             color_banner = widgets.QLabel()
             color_banner.setPixmap(pixmap)
-            color_banner.setScaledContents(True)
+            # color_banner.setScaledContents(True)
 
             container = widgets.QFrame(self)
             # container.setStyleSheet("QWidget#highlighted {border: 2px dotted black;}")
             cluster_layout = widgets.QGridLayout()
+            cluster_layout.setColumnStretch(0, 1)
+            cluster_layout.setColumnStretch(1, 3)
+
             cluster_layout.addWidget(color_banner, 0, 0, 2, 1)
             cluster_layout.addLayout(header, 0, 1)
 
@@ -188,6 +191,7 @@ class ClusterSelector(widgets.QScrollArea):
                     del self._cached_cluster_info[cluster_label]
                 else:
                     plots_loaded = True
+                plots_widget.set_ylim(wf_ylims)
             if not plots_loaded:
                 plots_widget = ClusterInfo(
                         cluster,
@@ -243,6 +247,10 @@ class ClusterInfo(widgets.QWidget):
         self.ax_isi.patch.set_alpha(0.0)
         clear_axes(self.ax_isi)
 
+    def set_ylim(self, ylim):
+        self.ylim = ylim
+        self.ax_wf.set_ylim(*self.ylim)
+
     def setup_data(self):
         cluster = self.cluster.flatten()
 
@@ -265,9 +273,9 @@ class ClusterInfo(widgets.QWidget):
         self.ax_wf.grid(True)
 
         if self.ylim is None:
-            self.ylim = self.ax_wf.get_ylim()
+            self.set_ylim(self.ax_wf.get_ylim())
         else:
-            self.ax_wf.set_ylim(*self.ylim)
+            self.set_ylim(self.ylim)
 
         isi = np.diff(cluster.times)
         isi_violations = np.sum(isi < 0.001) / len(isi)

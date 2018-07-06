@@ -11,6 +11,7 @@ import suss.io
 
 from suss.gui.cluster_select import ClusterSelector
 from suss.gui.isi import ISIPlot
+from suss.gui.projections import ProjectionsPlot
 from suss.gui.timeseries import TimeseriesPlot
 from suss.gui.tsne import TSNEPlot
 from suss.gui.waveforms import WaveformsPlot
@@ -446,8 +447,8 @@ class SussViewer(widgets.QFrame):
         layout.setRowStretch(1, 1.5)
         layout.setRowStretch(2, 1.5)
         layout.setRowStretch(3, 2)
-        layout.setColumnStretch(1, 1)
-        layout.setColumnStretch(2, 1)
+        layout.setColumnStretch(1, 1.5)
+        layout.setColumnStretch(2, 1.5)
         layout.setColumnStretch(3, 1)
 
         # Initialize TSNEPlot first so that the T-SNE embedding
@@ -455,7 +456,8 @@ class SussViewer(widgets.QFrame):
         # are being initialized
 
         # row, col, rowspan, colspan
-        layout.addWidget(TSNEPlot(parent=self), 1, 1, 2, 2)
+        layout.addWidget(TSNEPlot(parent=self), 1, 1, 2, 1)
+        layout.addWidget(ProjectionsPlot(parent=self), 1, 2, 2, 1)
         layout.addWidget(ClusterSelector(parent=self), 1, 0, 3, 1)
         layout.addWidget(WaveformsPlot(parent=self), 2, 3, 1, 1)
         layout.addWidget(ISIPlot(parent=self), 1, 3, 1, 1)

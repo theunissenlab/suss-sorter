@@ -15,6 +15,7 @@ try:
 except ImportError:
     from sklearn.manifold import TSNE
 
+from suss.sort import tsne_time
 from suss.gui.utils import require_dataset
 
 
@@ -30,13 +31,14 @@ def require_loaded(func):
 class BackgroundTSNE(QObject):
     finished = pyqtSignal(object)
 
-    def __init__(self, data):
+    def __init__(self, dataset):
         super().__init__()
-        self.data = data
+        self.dataset = dataset
 
     @pyqtSlot()
     def computeTSNE(self):
-        tsne = TSNE(n_components=2).fit_transform(self.data)
+        tsne = tsne_time(self.dataset)
+        # tsne = TSNE(n_components=2).fit_transform(self.dataset)
         print("Computed TSNE")
         self.finished.emit(tsne)
 
@@ -95,7 +97,7 @@ class TSNEPlot(widgets.QFrame):
         self.loading = True
         self.base_dataset = self.dataset
         self.base_flattened = self.dataset.flatten(1)
-        self.worker = BackgroundTSNE(self.base_flattened.waveforms)
+        self.worker = BackgroundTSNE(self.base_flattened)
         self.base_idx = self.base_flattened.ids
         self.base_labels = self.base_flattened.labels
 

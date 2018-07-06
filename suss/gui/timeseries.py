@@ -15,7 +15,7 @@ class TimeseriesPlot(widgets.QFrame):
         super().__init__(parent)
         self.size = size
 
-        self._rotation_period = 200
+        self._rotation_period = 800
         self.setup_plots()
         self.setup_data()
         self.init_ui()
