@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name="suss",
-    version="0.1",
+    version="0.0-alpha",
     packages=["suss"],
     description=("Automated spike sorting for single channel electrophysiology"),
     author="Kevin Yu",
