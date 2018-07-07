@@ -2,13 +2,15 @@ from functools import partial
 
 import numpy as np
 from PyQt5 import QtWidgets as widgets
-from PyQt5.QtCore import pyqtSignal
+from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5 import QtGui as gui
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 from matplotlib import ticker
 
-from suss.gui.utils import clear_axes, get_changed_labels
+from suss.gui.utils import clear_axes, get_changed_labels 
+
+import config
 
 
 class HoverButton(widgets.QPushButton):
@@ -101,7 +103,7 @@ class ClusterSelector(widgets.QScrollArea):
             button.clicked.emit(label in selected)
             button.setChecked(label in selected)
 
-    def on_cluster_highlight(self, new_highlight, old_highlight):
+    def on_cluster_highlight(self, new_highlight, old_highlight, temporary):
         if old_highlight is not None and old_highlight in self.panels:
             self.panels[old_highlight].setFrameShape(widgets.QFrame.NoFrame)
 
@@ -109,7 +111,7 @@ class ClusterSelector(widgets.QScrollArea):
             return
         new_panel = self.panels[new_highlight]
         self.panels[new_highlight].setFrameShape(widgets.QFrame.Box)
-        if self.allow_scroll_to:
+        if self.allow_scroll_to and not temporary:
             self.verticalScrollBar().setValue(new_panel.y())
 
     def set_highlight(self, cluster_label, selected):
@@ -203,11 +205,19 @@ class ClusterSelector(widgets.QScrollArea):
 
             container.setLayout(cluster_layout)
 
+            container.setContextMenuPolicy(Qt.CustomContextMenu)
+            container.customContextMenuRequested.connect(
+                partial(self.on_click, container, cluster_label)
+            )
+
             self.layout.addWidget(container)
             self.panels[cluster_label] = container
             progress.setValue(_progress)
 
         progress.setValue(len(self.dataset.nodes) + 1)
+
+    def on_click(self, obj, label, pos):
+        self.parent().show_right_click_menu(label, obj.mapToGlobal(pos))
 
     def init_ui(self):
         self.frame = widgets.QGroupBox()
@@ -279,8 +289,8 @@ class ClusterInfo(widgets.QWidget):
 
         isi = np.diff(cluster.times)
         isi_violations = np.sum(isi < 0.001) / len(isi)
-        n_bins = 40
-        t_max = 0.2
+        n_bins = config.ISI_BINS
+        t_max = config.ISI_MAX
         hist, bin_edges = np.histogram(isi, bins=n_bins, density=True, range=(0, t_max))
         self.ax_isi.bar(
                 (bin_edges[:-1] + bin_edges[1:]) / 2,

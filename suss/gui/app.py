@@ -203,7 +203,7 @@ class SussViewer(widgets.QFrame):
     # Emits a set of cluster labels that are currently selected and previously
     CLUSTER_SELECT = pyqtSignal(set, set)
     # Emits an integer label for the cluster that should be highlighted and previous
-    CLUSTER_HIGHLIGHT = pyqtSignal(object, object)
+    CLUSTER_HIGHLIGHT = pyqtSignal(object, object, bool)
 
     def __init__(self, dataset=None, parent=None):
         super().__init__(parent)
@@ -213,7 +213,7 @@ class SussViewer(widgets.QFrame):
         self.highlighted = None
 
         self.animation_timer = QTimer()
-        self.animation_timer.start(4.0)
+        self.animation_timer.start(10.0)
 
         main_menu = self.parent().menuBar()
         self.edit_menu = main_menu.addMenu("&Edit")
@@ -239,11 +239,11 @@ class SussViewer(widgets.QFrame):
             self.history_menu.addAction(new_action)
 
     def init_actions(self):
-        self.undo_action = widgets.QAction("Undo Action", self)
+        self.undo_action = widgets.QAction("Undo", self)
         self.merge_action = widgets.QAction("Merge", self)
         self.delete_action = widgets.QAction("Delete", self)
         self.clear_action = widgets.QAction("Clear Selection", self)
-        self.delete_others_action = widgets.QAction("Delete All But Selected", self)
+        self.delete_others_action = widgets.QAction("Filter", self)
         self.select_all_action = widgets.QAction("Select All", self)
 
         self.undo_action.triggered.connect(self._undo)
@@ -253,6 +253,49 @@ class SussViewer(widgets.QFrame):
         self.clear_action.triggered.connect(self.clear)
         self.select_all_action.triggered.connect(self.select_all)
 
+    @contextmanager
+    def temporary_highlight(self, label):
+        prev_highlight = self.highlighted
+        self.set_highlight(label, temporary=True)
+        yield
+        self.set_highlight(prev_highlight, temporary=True)
+
+    def show_right_click_menu(self, label, pos):
+        with self.temporary_highlight(label):
+            menu = widgets.QMenu()
+
+            if len(self.selected) >= 2:
+                sel = list(self.selected)
+                _merge_action = widgets.QAction(
+                        "Merge Clusters {} and {}".format(
+                            ", ".join(map(str, sel[:-1])), sel[-1]
+                        ),
+                        self
+                )
+                menu.addAction(_merge_action)
+                _merge_action.triggered.connect(self.merge)
+
+            _recluster_action = widgets.QAction("Recluster Cluster {}".format(label), self)
+            menu.addAction(_recluster_action)
+            _recluster_action.triggered.connect(partial(self.recluster, label))
+
+            _delete_action = widgets.QAction("Delete Cluster {}".format(label), self)
+            menu.addAction(_delete_action)
+            _delete_action.triggered.connect(partial(self._delete, [label]))
+
+            if len(self.selected) >= 2:
+                _delete_all_action = widgets.QAction("Delete All Selected", self)
+                menu.addAction(_delete_all_action)
+                _delete_all_action.triggered.connect(self.delete)
+
+            if len(self.stack) > 1:
+                menu.addAction(self.undo_action)
+
+            menu.exec_(pos)
+
+    def recluster(self, label):
+        print("reclusteirng", label)
+
     @property
     def dataset(self):
         return self.stack[-1][1]
@@ -261,14 +304,16 @@ class SussViewer(widgets.QFrame):
     def last_action(self):
         return self.stack[-1][0]
 
-    def set_highlight(self, label):
+    def set_highlight(self, label, temporary=False):
         """Update highlight state and emit signal"""
         _old_label = self.highlighted
         if label == _old_label:
             return
         self.highlighted = label
-        self.CLUSTER_HIGHLIGHT.emit(self.highlighted,
-                _old_label if _old_label is not None else None)
+        self.CLUSTER_HIGHLIGHT.emit(
+                self.highlighted,
+                _old_label if _old_label is not None else None,
+                temporary)
 
     def set_selected(self, selected):
         """Update selection state and emit signal if changed"""
@@ -299,7 +344,7 @@ class SussViewer(widgets.QFrame):
     def timer_paused(self):
         self.animation_timer.stop()
         yield
-        self.animation_timer.start(4.0)
+        self.animation_timer.start(10.0)
 
     def setup_shortcuts(self):
         self.undo_action.setShortcut(gui.QKeySequence.Undo)

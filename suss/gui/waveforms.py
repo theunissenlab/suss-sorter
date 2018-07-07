@@ -87,7 +87,7 @@ class WaveformsPlot(widgets.QFrame):
                 rasterized=True)
         self.canvas.draw_idle()
 
-    def on_cluster_highlight(self, new_highlight, old_highlight):
+    def on_cluster_highlight(self, new_highlight, old_highlight, temporary):
         if new_highlight is None:
             if self.highlight_plot is not None:
                 self.highlight_plot.set_visible(False)

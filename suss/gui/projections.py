@@ -100,7 +100,7 @@ class ProjectionsPlot(widgets.QFrame):
         )
         self.canvas.draw_idle()
 
-    def on_cluster_highlight(self, new_highlight, old_highlight):
+    def on_cluster_highlight(self, new_highlight, old_highlight, temporary):
         pass
 
     def init_ui(self):

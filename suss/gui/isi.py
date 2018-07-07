@@ -3,6 +3,8 @@ from PyQt5 import QtWidgets as widgets
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
+import config
+
 
 class ISIPlot(widgets.QFrame):
 
@@ -42,7 +44,7 @@ class ISIPlot(widgets.QFrame):
                 [0, 0.15, 1, 0.85],
                 facecolor="#C0C0C0")
         self.ax.patch.set_alpha(0.8)
-        self.ax.set_xlim(0, 0.2)
+        self.ax.set_xlim(0, config.ISI_MAX)
         self.ax.set_xticks([0.001, 0.02])
         self.ax.set_xticklabels(
                 ["1ms", "20ms"],
@@ -74,10 +76,10 @@ class ISIPlot(widgets.QFrame):
         if not len(selected):
             self.isi_label.set_text("")
         self.ax.clear()
-        self.ax.set_xlim(0, 0.2)
-        self.ax.set_xticks([0.001, 0.02])
+        self.ax.set_xlim(0, config.ISI_MAX)
+        self.ax.set_xticks([0.001, 0.02] + ([] if config.ISI_MAX <= 0.1 else [0.1]))
         self.ax.set_xticklabels(
-                ["1ms", "20ms"],
+                ["1ms", "20ms"] + ([] if config.ISI_MAX <= 0.1 else ["100ms"]),
                 horizontalalignment="left",
                 fontsize=5)
         for tick in self.ax.get_xaxis().get_major_ticks():
@@ -108,9 +110,9 @@ class ISIPlot(widgets.QFrame):
                 isi[across_clusters],
                 isi[within_cluster]
             ],
-            bins=40,
+            bins=config.ISI_BINS,
             density=True,
-            range=(0, 0.2),
+            range=(0, config.ISI_MAX),
             stacked=True,
             alpha=0.8,
             color=["Orange", "Black"]
@@ -142,7 +144,7 @@ class ISIPlot(widgets.QFrame):
 
         self.canvas.draw_idle()
 
-    def on_cluster_highlight(self, new_highlight, old_highlight):
+    def on_cluster_highlight(self, new_highlight, old_highlight, temporary):
         pass
 
     def init_ui(self):

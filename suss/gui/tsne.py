@@ -5,7 +5,7 @@ from contextlib import contextmanager
 
 import numpy as np
 from PyQt5 import QtWidgets as widgets
-from PyQt5.QtCore import Qt, QObject, QThread, pyqtSignal, pyqtSlot
+from PyQt5.QtCore import Qt, QObject, QPoint, QThread, pyqtSignal, pyqtSlot
 from PyQt5 import QtGui as gui
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
@@ -231,7 +231,7 @@ class TSNEPlot(widgets.QFrame):
 
     @require_dataset
     @require_loaded
-    def on_cluster_highlight(self, new_highlight, old_highlight):
+    def on_cluster_highlight(self, new_highlight, old_highlight, temporary):
         if old_highlight in self.scatters:
             self.scatters[old_highlight][1].set_visible(False)
         if new_highlight is not None:
@@ -281,4 +281,11 @@ class TSNEPlot(widgets.QFrame):
     def _on_click(self, event):
         closest_idx, dist = self._closest_node(event.xdata, event.ydata)
         label = self.current_labels[closest_idx]
-        self.parent().toggle_selected(label, label not in self.selected)
+        if event.button == 1:
+            self.parent().toggle_selected(label, label not in self.selected)
+        else:
+            fig_position = self.ax.transData.transform([event.xdata, -event.ydata])
+            self.parent().show_right_click_menu(
+                label,
+                self.mapToGlobal(QPoint(fig_position[0], fig_position[1]))
+            )

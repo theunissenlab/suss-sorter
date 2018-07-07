@@ -1,0 +1,2 @@
+ISI_MAX = 0.150
+ISI_BINS = 30
