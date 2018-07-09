@@ -149,10 +149,6 @@ class BaseDataset(object):
                 ids=selected_subset["ids"],
                 labels=labels)
 
-    def merge(self, *nodes):
-        ids = np.concatenate([node.ids for node in nodes])
-        return self.select(ids)
-
     def windows(self, dt=None, dpoints=None):
         if dpoints is not None and dt is None:
             idxs = np.arange(0, len(self.times), dpoints).astype(np.int)
@@ -265,130 +261,6 @@ class ClusterDataset(BaseDataset):
                 labels=self.labels[selector]
             )
 
-    def delete_node(self, node=None, idx=None, label=None):
-        if np.sum([node is not None, idx is not None, label is not None]) != 1:
-            raise ValueError("Only one of {node, idx, label} can be provided")
-        if label is not None:
-            match = np.where(self.labels == label)[0]
-        elif node is not None:
-            match = np.where(self.nodes == node)[0]
-        elif idx is not None:
-            match = [idx]
-
-        if len(match) > 1:
-            raise ValueError("More than one node matched "
-                    "label {}".format(label))
-        elif len(match) == 0:
-            raise ValueError("No node matched label {}".format(label))
-        else:
-            idx = match[0]
-
-        selector = np.eye(len(self))[idx].astype(np.bool)
-
-        return self.select(np.logical_not(selector), child=False)
-
-    def add_nodes(self, *nodes):
-        if not len(self.labels):
-            start_at = 0
-        else:
-            start_at = np.max(self.labels)
-
-        new_labels = np.arange(
-                start_at + 1,
-                start_at + len(nodes) + 1
-        )
-        return ClusterDataset(
-            np.concatenate([self.nodes, nodes]),
-            data_column=self.data_column,
-            labels=np.concatenate([self.labels, new_labels])
-        )
-
-    def uncluster_node(self, node=None, idx=None, label=None):
-        if np.sum([node is not None, idx is not None, label is not None]) != 1:
-            raise ValueError("Only one of {node, idx, label} can be provided")
-        if label is not None:
-            match = np.where(self.labels == label)[0]
-        elif node is not None:
-            match = np.where(self.nodes == node)[0]
-        elif idx is not None:
-            match = [idx]
-
-        if len(match) > 1:
-            raise ValueError("More than one node matched "
-                    "label {}".format(label))
-        elif len(match) == 0:
-            raise ValueError("No node matched label {}".format(label))
-        else:
-            idx = match[0]
-
-        node = self.nodes[idx]
-        new_dataset = self.delete_node(idx=idx)
-        new_dataset = new_dataset.add_nodes(*node.nodes)
-
-        return new_dataset
-
-    def split_node(
-            self,
-            t_start,
-            t_stop,
-            node=None,
-            idx=None,
-            label=None,
-            keep_both=True):
-
-        if np.sum([node is not None, idx is not None, label is not None]) != 1:
-            raise ValueError("Only one of {node, idx, label} can be provided")
-        if label is not None:
-            match = np.where(self.labels == label)[0]
-        elif node is not None:
-            match = np.where(self.nodes == node)[0]
-        elif idx is not None:
-            match = [idx]
-
-        if len(match) > 1:
-            raise ValueError("More than one node matched "
-                    "label {}".format(label))
-        elif len(match) == 0:
-            raise ValueError("No node matched label {}".format(label))
-        else:
-            idx = match[0]
-
-        selector = np.eye(len(self))[idx].astype(np.bool)
-        in_range, out_range = self.nodes[idx].time_split(t_start, t_stop)
-        new_dataset = self.select(np.logical_not(selector), child=False)
-
-        if len(in_range) > 0:
-            new_dataset = new_dataset.add_nodes(in_range)
-        if keep_both and len(out_range) > 0:
-            new_dataset = new_dataset.add_nodes(out_range)
-
-        return new_dataset
-
-    def merge_nodes(self, labels=None, idxs=None, nodes=None):
-        if np.sum([
-                nodes is not None,
-                idxs is not None,
-                labels is not None]) != 1:
-            raise ValueError("Only one of {nodes, idxs, labels} "
-                    "can be provided")
-        if labels is not None:
-            match = np.where(np.isin(self.labels, list(labels)))[0]
-        elif nodes is not None:
-            match = np.where(np.isin(self.nodes, list(nodes)))[0]
-        elif idxs is not None:
-            match = idxs
-
-        selector = np.zeros(len(self)).astype(np.bool)
-        selector[match] = True
-
-        nodes = self.select(selector).nodes
-
-        merged = nodes[0].merge(*nodes[1:])
-        new_dataset = self.select(np.logical_not(selector), child=False)
-        new_dataset = new_dataset.add_nodes(merged)
-
-        return new_dataset
-
 
 class SubDataset(BaseDataset):
     """Represents a subset of data in a dataset
@@ -411,15 +283,6 @@ class SubDataset(BaseDataset):
         if not all(self.ids[:-1] <= self.ids[1:]):
             self._data.sort(order="ids")
         self.data_column = self.parent.data_column
-
-    def merge(self, *nodes):
-        """Merge this node with one or more other nodes"""
-        all_nodes = [self] + list(nodes)
-        return SubDataset(
-            self.parent,
-            ids=np.concatenate([node.ids for node in all_nodes]),
-            source_dataset=self.source
-        )
 
     def split(self, selector):
         """Split the SubDataset into two by selector array

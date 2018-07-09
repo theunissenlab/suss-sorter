@@ -238,6 +238,17 @@ def tsne_time(dataset, perplexity=30, t_scale=30 * 60 * 60, pcs=12):
     )
 
 
+def pca_time(dataset, t_scale=30 * 60 * 60, pcs=6):
+    pcaed = PCA(n_components=pcs).fit_transform(dataset.waveforms)
+    wf_arr = scipy.stats.zscore(pcaed, axis=0)
+    t_arr = dataset.times / t_scale
+    t_arr = t_arr - np.mean(t_arr)
+
+    return PCA(n_components=pcs).fit_transform(
+        np.hstack([wf_arr, t_arr[:, None]])
+    )
+
+
 def is_isolated(labels, quality_dict, min_count=12, min_isolation=0.99):
     return np.array([
         (

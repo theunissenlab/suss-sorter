@@ -278,6 +278,8 @@ class ClusterInfo(widgets.QWidget):
                 alpha=1.0,
                 linewidth=2)[0]
 
+        fr = len(cluster) / (np.max(cluster.times) - np.min(cluster.times))
+
         self.ax_wf.yaxis.set_major_locator(ticker.MultipleLocator(base=100))
         self.ax_wf.xaxis.set_major_locator(ticker.MultipleLocator(base=10))
         self.ax_wf.grid(True)
@@ -286,6 +288,9 @@ class ClusterInfo(widgets.QWidget):
             self.set_ylim(self.ax_wf.get_ylim())
         else:
             self.set_ylim(self.ylim)
+
+        self.ax_wf.text(40, self.ax_wf.get_ylim()[0], "{:.1f} Hz".format(fr),
+                horizontalalignment="right", verticalalignment="bottom")
 
         isi = np.diff(cluster.times)
         isi_violations = np.sum(isi < 0.001) / len(isi)

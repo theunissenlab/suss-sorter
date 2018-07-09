@@ -73,11 +73,16 @@ class ProjectionsPlot(widgets.QFrame):
         selected_data = self.dataset.select(
             np.isin(self.dataset.labels, list(selected))
         )
+
+        if not len(selected_data.flatten(1)):
+            self.canvas.draw_idle()
+            return
+
         skip = max(1, int(selected_data.count / 1000))
         self.projector = PCA(n_components=2).fit(selected_data.flatten(1).waveforms)
 
         projected = [
-            self.projector.transform(node.flatten().waveforms[::skip])
+            self.projector.transform(node.flatten().waveforms[::1 if skip > len(node.flatten().waveforms) else skip])
             for node in selected_data.nodes
         ]
 

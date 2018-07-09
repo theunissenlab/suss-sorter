@@ -234,7 +234,7 @@ class TSNEPlot(widgets.QFrame):
     def on_cluster_highlight(self, new_highlight, old_highlight, temporary):
         if old_highlight in self.scatters:
             self.scatters[old_highlight][1].set_visible(False)
-        if new_highlight is not None:
+        if new_highlight in self.scatters:
             self.scatters[new_highlight][1].set_visible(True)
 
         self.canvas.draw_idle()

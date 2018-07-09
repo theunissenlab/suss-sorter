@@ -16,6 +16,7 @@ from suss.gui.timeseries import TimeseriesPlot
 from suss.gui.tsne import TSNEPlot
 from suss.gui.waveforms import WaveformsPlot
 from suss.gui.utils import make_color_map, get_changed_labels
+from suss.operations import delete_nodes, merge_nodes, recluster_node
 
 
 class App(widgets.QMainWindow):
@@ -210,6 +211,7 @@ class SussViewer(widgets.QFrame):
         self.stack = [("load", dataset)]
 
         self.selected = set()
+        self._highlights_disabled = False
         self.highlighted = None
 
         self.animation_timer = QTimer()
@@ -258,7 +260,17 @@ class SussViewer(widgets.QFrame):
         prev_highlight = self.highlighted
         self.set_highlight(label, temporary=True)
         yield
-        self.set_highlight(prev_highlight, temporary=True)
+        if prev_highlight in self.dataset.labels:
+            self.set_highlight(prev_highlight, temporary=True)
+        else:
+            pass
+
+    @contextmanager
+    def disable_highlighting(self):
+        """Use this to avoid inadvertent highlighting while operations are occuring"""
+        self._highlights_disabled = True
+        yield
+        self._highlights_disabled = False
 
     def show_right_click_menu(self, label, pos):
         with self.temporary_highlight(label):
@@ -275,9 +287,10 @@ class SussViewer(widgets.QFrame):
                 menu.addAction(_merge_action)
                 _merge_action.triggered.connect(self.merge)
 
-            _recluster_action = widgets.QAction("Recluster Cluster {}".format(label), self)
-            menu.addAction(_recluster_action)
-            _recluster_action.triggered.connect(partial(self.recluster, label))
+            if len(self.dataset.select(self.dataset.labels == label).flatten(1)) > 10:
+                _recluster_action = widgets.QAction("Recluster Cluster {}".format(label), self)
+                menu.addAction(_recluster_action)
+                _recluster_action.triggered.connect(partial(self.recluster, label))
 
             _delete_action = widgets.QAction("Delete Cluster {}".format(label), self)
             menu.addAction(_delete_action)
@@ -294,7 +307,15 @@ class SussViewer(widgets.QFrame):
             menu.exec_(pos)
 
     def recluster(self, label):
-        print("reclusteirng", label)
+        _new_dataset = recluster_node(self.dataset, label=label)
+        new_labels = set(_new_dataset.labels)
+        changed_labels = get_changed_labels(_new_dataset, self.dataset)
+
+        _old_selected = self.selected.copy()
+        self.selected = set.intersection(new_labels, changed_labels)
+        self.colors = make_color_map(_new_dataset.labels)
+        self._enstack("recluster", _new_dataset)
+        self.CLUSTER_SELECT.emit(self.selected, _old_selected)
 
     @property
     def dataset(self):
@@ -306,6 +327,9 @@ class SussViewer(widgets.QFrame):
 
     def set_highlight(self, label, temporary=False):
         """Update highlight state and emit signal"""
+        if self._highlights_disabled:
+            return
+
         _old_label = self.highlighted
         if label == _old_label:
             return
@@ -368,12 +392,13 @@ class SussViewer(widgets.QFrame):
     def _enstack(self, action, dataset):
         with self.timer_paused():
             _old_dataset = self.dataset
-            self.stack.append((action, dataset))
-            self.colors = make_color_map(self.dataset.labels)
-            self.UPDATED_CLUSTERS.emit(
-                    self.dataset,
-                    _old_dataset,
-            )
+            with self.disable_highlighting():
+                self.stack.append((action, dataset))
+                self.colors = make_color_map(self.dataset.labels)
+                self.UPDATED_CLUSTERS.emit(
+                        self.dataset,
+                        _old_dataset,
+                )
 
     def _undo(self):
         if len(self.stack) == 1:
@@ -428,7 +453,7 @@ class SussViewer(widgets.QFrame):
                     "Not enough clusters selected to merge")
             return
 
-        _new_dataset = self.dataset.merge_nodes(labels=self.selected)
+        _new_dataset = merge_nodes(self.dataset, labels=self.selected)
         new_labels = set(_new_dataset.labels)
         changed_labels = get_changed_labels(_new_dataset, self.dataset)
 
@@ -446,9 +471,7 @@ class SussViewer(widgets.QFrame):
                     "No clusters selected for deletion")
             return
 
-        _new_dataset = self.dataset
-        for label in to_delete:
-            _new_dataset = _new_dataset.delete_node(label=label)
+        _new_dataset = delete_nodes(self.dataset, labels=list(to_delete))
 
         plural = "s" if len(to_delete) > 1 else ""
         self._enstack("{} node".format(action) + plural, _new_dataset)
@@ -475,7 +498,7 @@ class SussViewer(widgets.QFrame):
         _old_selected = self.selected.copy()
         self.selected = set()
         self.CLUSTER_SELECT.emit(self.selected, _old_selected)
-        self.CLUSTER_HIGHLIGHT.emit(None, self.highlighted)
+        self.CLUSTER_HIGHLIGHT.emit(None, self.highlighted, False)
 
     def init_ui(self):
         self.edit_menu.addAction(self.select_all_action)
