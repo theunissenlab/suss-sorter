@@ -74,17 +74,44 @@ class ProjectionsPlot(widgets.QFrame):
             np.isin(self.dataset.labels, list(selected))
         )
 
-        if not len(selected_data.flatten(1)):
+        skip = max(1, int(selected_data.count / 1000))
+
+        if len(selected_data.flatten(1).waveforms) < 2:
             self.canvas.draw_idle()
             return
 
-        skip = max(1, int(selected_data.count / 1000))
         self.projector = PCA(n_components=2).fit(selected_data.flatten(1).waveforms)
 
         projected = [
             self.projector.transform(node.flatten().waveforms[::1 if skip > len(node.flatten().waveforms) else skip])
             for node in selected_data.nodes
         ]
+
+        '''
+        times = np.concatenate([
+            node.flatten().times
+            for node in selected_data.nodes
+        ])
+        wfs = np.concatenate([
+            self.projector.transform(node.flatten().waveforms)
+            for node in selected_data.nodes
+        ])
+        labels = np.concatenate([
+            np.ones(node.count).astype(np.int) * label
+            for label, node in zip(selected_data.labels, selected_data.nodes)
+        ])
+        time_argsort = np.argsort(times)
+        sorted_times = times[time_argsort]
+        sorted_2d = wfs[time_argsort]
+        sorted_labels = labels[time_argsort]
+
+        print(np.where(np.diff(sorted_times) < 0.001)[0])
+
+        isi_violations = np.where((np.diff(sorted_times) < 0.001) & (sorted_labels[:-1] != sorted_labels[1:]))[0]
+        print(isi_violations)
+        lines_x = np.array([sorted_2d[isi_violations, 0], sorted_2d[isi_violations + 1, 0]])[:, ::1 + skip // 100]
+        lines_y = np.array([sorted_2d[isi_violations, 1], sorted_2d[isi_violations + 1, 1]])[:, ::1 + skip // 100]
+        '''
 
         for label, data in zip(selected_data.labels, projected):
             self.ax_2d.scatter(
@@ -94,6 +121,9 @@ class ProjectionsPlot(widgets.QFrame):
                 alpha=1,
                 rasterized=True
             )
+        '''
+        self.ax_2d.plot(lines_x, lines_y, linewidth=0.5, color="White", linestyle="--")
+        '''
 
         self.ax_1d.hist(
                 [data[:, 0] for data in projected],

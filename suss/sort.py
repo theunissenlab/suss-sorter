@@ -81,7 +81,7 @@ def cluster_step(
 
 
 def reassign_unassigned(waveforms, labels):
-    neigh = KNeighborsClassifier(n_neighbors=1)
+    neigh = KNeighborsClassifier(n_neighbors=3)
     if len(np.where(labels != -1)[0]) == 0:
         return labels
 
@@ -193,6 +193,8 @@ def get_flippable_points(data, labels, n_neighbors=10):
 
 
 def cleanup_clusters(data, labels, n_neighbors=20):
+    if len(data) <= n_neighbors:
+        n_neighbors = 2
     cleaner = KNeighborsClassifier(n_neighbors=n_neighbors)
     cleaner.fit(data, labels)
     labels = cleaner.predict(data)
@@ -200,7 +202,7 @@ def cleanup_clusters(data, labels, n_neighbors=20):
 
 
 def flip_points(data, labels, flippable, n_neighbors=10, create_labels=False):
-    if len(flippable) == 0:
+    if np.sum(flippable) == 0:
         return labels
     if create_labels:
         hdb = hdbscan.HDBSCAN(min_cluster_size=3)
@@ -233,7 +235,7 @@ def tsne_time(dataset, perplexity=30, t_scale=30 * 60 * 60, pcs=12):
     t_arr = dataset.times / t_scale
     t_arr = t_arr - np.mean(t_arr)
 
-    return TSNE(n_components=2, perplexity=perplexity).fit_transform(
+    return TSNE(n_components=2, perplexity=perplexity, n_iter=2000, n_iter_without_progress=500).fit_transform(
         np.hstack([wf_arr, t_arr[:, None]])
     )
 
@@ -263,6 +265,7 @@ def whittle(dataset, n=10):
     """
     temp_dataset = dataset
     final_labels = -1 * np.ones(len(dataset)).astype(np.int)
+    cluster_size = 6
     for idx in range(n):
         mask = final_labels == -1
 
@@ -272,13 +275,17 @@ def whittle(dataset, n=10):
         temp_dataset = dataset.select(mask)
         tsned = tsne_time(temp_dataset)
 
-        hdb = hdbscan.HDBSCAN(min_cluster_size=3)
+        hdb = hdbscan.HDBSCAN(min_cluster_size=cluster_size)
         labels = hdb.fit_predict(tsned)
         if -1 in labels:
             labels = reassign_unassigned(tsned, labels)
 
         quality = cluster_quality(tsned, labels)
         isolated = is_isolated(labels, quality)
+        if not len(isolated) and cluster_size > 2:
+            cluster_size -= 1
+        else:
+            cluster_size += 1 
         labels[np.logical_not(isolated)] = -1
         labels[labels != -1] += np.max(final_labels) + 1
         final_labels[mask] = labels
@@ -296,8 +303,8 @@ def denoise(times, waveforms):
     denoised = cluster_step(
         denoised,
         dpoints=200,
-        n_components=20,
-        min_cluster_size=5,
+        n_components=30,
+        min_cluster_size=2,
         mode="kmeans"
     )
     denoised = denoised.select([isi(n) < 0.05 for n in denoised.nodes])
@@ -306,6 +313,8 @@ def denoise(times, waveforms):
 
 def sort(denoised):
     whittled = whittle(denoised)
+    if not len(whittled):
+        return whittled
 
     flat = whittled.flatten(1)
     tsned = tsne_time(flat)
@@ -313,19 +322,19 @@ def sort(denoised):
 
     labels = cleanup_clusters(tsned, labels, n_neighbors=20)
     labels = cleanup_clusters(tsned, labels, n_neighbors=10)
-
+      
     # Not sure if the next few lines help
     flippable = get_flippable_points(tsned, labels)
     labels = flip_points(tsned, labels, flippable, create_labels=True)
     labels = cleanup_clusters(tsned, labels, n_neighbors=20)
-
+    
     counts = dict(
-            (label, np.sum(labels == label))
-            for label in np.unique(labels)
+        (label, np.sum(labels == label))
+        for label in np.unique(labels)
     )
     flippable = [counts[label] < 10 for label in labels]
     if np.any(flippable):
         labels = flip_points(tsned, labels, flippable)
-    labels = cleanup_clusters(tsned, labels, n_neighbors=20)
+    labels = cleanup_clusters(tsned, labels, n_neighbors=10)
 
-    return tsned, flat.cluster(labels)
+    return flat.cluster(labels)

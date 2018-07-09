@@ -1,5 +1,6 @@
 import functools
 
+from PyQt5 import QtWidgets as widgets
 import numpy as np
 from matplotlib import cm
 

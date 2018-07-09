@@ -1,3 +1,4 @@
+import os
 from functools import partial
 
 import numpy as np
@@ -9,6 +10,7 @@ from matplotlib.figure import Figure
 from matplotlib import ticker
 
 from suss.gui.utils import clear_axes, get_changed_labels 
+from suss.analysis import align
 
 import config
 
@@ -63,6 +65,17 @@ class ClusterSelector(widgets.QScrollArea):
         super().__init__(parent)
         self.allow_scroll_to = True
         self._cached_cluster_info = {}
+        vocal_period_file = os.path.join(
+                os.path.dirname(os.path.dirname(self.window().current_file)),
+                "vocal_periods.npy")
+        if os.path.exists(vocal_period_file):
+            vocal_periods = np.load(vocal_period_file)[()]["live"]
+            self.start_times = [
+                period["start_time"].item() for period in vocal_periods
+            ]
+        else:
+            self.start_times = None
+
         self.setup_data()
         self.init_ui()
 
@@ -151,7 +164,7 @@ class ClusterSelector(widgets.QScrollArea):
 
             header = widgets.QHBoxLayout()
             header_label = widgets.QLabel(
-                "<b>{}</b> (n={}) ({} subclusters)".format(
+                "<b>{}</b> (n={}) {}".format(
                     cluster_label,
                     cluster.count,
                     len(cluster.nodes)
@@ -164,7 +177,7 @@ class ClusterSelector(widgets.QScrollArea):
             header.addWidget(check_button)
             header.addWidget(header_label)
 
-            pixmap = gui.QPixmap(30, 60)
+            pixmap = gui.QPixmap(10, 90)
             pixmap.fill(gui.QColor(*[
                 255 * c
                 for c in self.colors[cluster_label]
@@ -174,11 +187,11 @@ class ClusterSelector(widgets.QScrollArea):
             color_banner.setPixmap(pixmap)
             # color_banner.setScaledContents(True)
 
-            container = widgets.QFrame(self)
+            container = widgets.QFrame(self) # ClusterClickFilter(self, label=cluster_label)
             # container.setStyleSheet("QWidget#highlighted {border: 2px dotted black;}")
             cluster_layout = widgets.QGridLayout()
-            cluster_layout.setColumnStretch(0, 1)
-            cluster_layout.setColumnStretch(1, 3)
+            # cluster_layout.setColumnStretch(0, 1)
+            cluster_layout.setColumnStretch(1, 6)
 
             cluster_layout.addWidget(color_banner, 0, 0, 2, 1)
             cluster_layout.addLayout(header, 0, 1)
@@ -229,7 +242,7 @@ class ClusterSelector(widgets.QScrollArea):
 
 class ClusterInfo(widgets.QWidget):
 
-    def __init__(self, cluster, color, size=(200, 75), ylim=None, parent=None):
+    def __init__(self, cluster, color, size=(250, 75), ylim=None, parent=None):
         super().__init__(parent)
         self.cluster = cluster
         self.color = color
@@ -251,11 +264,13 @@ class ClusterInfo(widgets.QWidget):
         self.canvas = FigureCanvas(fig)
         self.canvas.setFixedSize(*self.size)
         self.canvas.setStyleSheet("background-color:transparent;")
-        self.ax_wf = fig.add_axes([0.0, 0, 0.5, 1])
+        self.ax_wf = fig.add_axes([0.0, 0, 0.33, 1])
         self.ax_wf.patch.set_alpha(0.0)
-        self.ax_isi = fig.add_axes([0.5, 0, 0.5, 1])
+        self.ax_isi = fig.add_axes([0.33, 0, 0.33, 1])
         self.ax_isi.patch.set_alpha(0.0)
-        clear_axes(self.ax_isi)
+        self.ax_psth = fig.add_axes([0.66, 0, 0.34, 1])
+        self.ax_psth.patch.set_alpha(0.0)
+        clear_axes(self.ax_isi, self.ax_psth)
 
     def set_ylim(self, ylim):
         self.ylim = ylim
@@ -317,9 +332,33 @@ class ClusterInfo(widgets.QWidget):
                 linewidth=0.2)
         self.ax_isi.set_xlim(0, t_max)
 
+        if self.parent().start_times:
+            start_times = [
+                start_time for start_time in self.parent().start_times
+                if cluster.times[0] <= start_time < cluster.times[-1]
+            ]
+            psth = align(cluster.flatten(), start_times, -0.5, 1.5)
+            hist, bin_edges = np.histogram(
+                    np.concatenate(psth),
+                    bins=20,
+                    density=False,
+                    range=(-0.5, 1.5))
+            self.ax_psth.bar(
+                    (bin_edges[:-1] + bin_edges[1:]) / 2,
+                    hist / len(psth),
+                    width=2 / 20.0,
+                    color="Black")
+            self.ax_psth.vlines(
+                    [0.5],
+                    *self.ax_psth.get_ylim(),
+                    color="Red",
+                    linestyle="--",
+                    linewidth=0.5,
+            )
+            # self.ax_psth.set_ylim(0, 20.0)
+
         peaks = np.min(cluster.waveforms, axis=1)
         hist, bin_edges = np.histogram(peaks, bins=50, density=True, range=(-200, 0))
-
         self.canvas.draw_idle()
 
     def init_ui(self):
