@@ -123,12 +123,12 @@ def recluster_node(dataset, node=None, idx=None, label=None):
 
     # Get the node you want to recluster and flatten it
     selected_data = dataset.select(selector).flatten(1)
-    cluster_on = pca_time(selected_data, pcs=6, t_scale=10 * 60 * 60.0)
+    cluster_on = pca_time(selected_data, pcs=6, t_scale=30 * 60 * 60.0)
 
     # Reassociate that data with new labels
-    kmeans = KMeans(n_clusters=3).fit(cluster_on)
+    kmeans = KMeans(n_clusters=4).fit(cluster_on)
     labels = kmeans.predict(cluster_on)
-    labels = cleanup_clusters(cluster_on, labels, n_neighbors=5)
+    labels = cleanup_clusters(cluster_on, labels, n_neighbors=3)
     reclustered = selected_data.cluster(labels)
 
     new_dataset = dataset.select(np.logical_not(selector), child=False)

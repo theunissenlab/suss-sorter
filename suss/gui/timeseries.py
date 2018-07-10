@@ -145,6 +145,9 @@ class TimeseriesPlot(widgets.QFrame):
         for dim, ax in enumerate(self.axes):
             ylim = np.max(np.abs(self.pcs[:, dim])) * 1.2
             ax.set_ylim(-ylim, ylim)
+            fully_flat = self.dataset.flatten().times
+            xlim = (fully_flat[0], fully_flat[-1])
+            ax.set_xlim(*xlim)
 
         self.canvas.draw_idle()
 

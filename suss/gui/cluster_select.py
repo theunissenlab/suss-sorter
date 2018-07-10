@@ -3,14 +3,15 @@ from functools import partial
 
 import numpy as np
 from PyQt5 import QtWidgets as widgets
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import Qt, QObjectCleanupHandler, pyqtSignal
 from PyQt5 import QtGui as gui
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 from matplotlib import ticker
 
-from suss.gui.utils import clear_axes, get_changed_labels 
 from suss.analysis import align
+from suss.gui.utils import clear_axes, get_changed_labels 
+from suss.tags import ClusterTag
 
 import config
 
@@ -65,16 +66,18 @@ class ClusterSelector(widgets.QScrollArea):
         super().__init__(parent)
         self.allow_scroll_to = True
         self._cached_cluster_info = {}
+
+        # TOOD (kevin): make this configurable
         vocal_period_file = os.path.join(
                 os.path.dirname(os.path.dirname(self.window().current_file)),
                 "vocal_periods.npy")
         if os.path.exists(vocal_period_file):
             vocal_periods = np.load(vocal_period_file)[()]["live"]
-            self.start_times = [
+            self.stimuli = [
                 period["start_time"].item() for period in vocal_periods
             ]
         else:
-            self.start_times = None
+            self.stimuli = None
 
         self.setup_data()
         self.init_ui()
@@ -220,7 +223,7 @@ class ClusterSelector(widgets.QScrollArea):
 
             container.setContextMenuPolicy(Qt.CustomContextMenu)
             container.customContextMenuRequested.connect(
-                partial(self.on_click, container, cluster_label)
+                partial(self.on_click, container, cluster, cluster_label)
             )
 
             self.layout.addWidget(container)
@@ -229,15 +232,49 @@ class ClusterSelector(widgets.QScrollArea):
 
         progress.setValue(len(self.dataset.nodes) + 1)
 
-    def on_click(self, obj, label, pos):
-        self.parent().show_right_click_menu(label, obj.mapToGlobal(pos))
+    def create_tags_menu(self, cluster):
+        menu = widgets.QMenu("Tags")
+
+        for _tag in ClusterTag:
+            _act = widgets.QAction(str(_tag), self)
+            _act.setCheckable(True)
+            _act.setChecked(_tag in cluster.tags)
+            _act.toggled.connect(partial(self._update_tag, cluster, _tag))
+            menu.addAction(_act)
+
+        return menu
+
+    def draw_tags(self, tags_frame, cluster):
+        tags_layout = widgets.QHBoxLayout()
+        if not cluster.tags:
+            tags_layout.addWidget(widgets.QLabel("No tags"))
+        else:
+            for tag in cluster.tags:
+                tags_layout.addWidget(widgets.QLabel(
+                    "{}".format(tag)
+                ))
+        QObjectCleanupHandler().add(tags_frame.layout())
+        tags_frame.setLayout(tags_layout)
+
+    def _update_tag(self, cluster, _tag, state):
+        if state and _tag not in cluster.tags:
+            cluster.add_tag(_tag)
+        elif not state and _tag in cluster.tags:
+            cluster.remove_tag(_tag)
+
+    def on_click(self, obj, cluster, label, pos):
+        self.parent().show_right_click_menu(
+                label,
+                obj.mapToGlobal(pos),
+                [self.create_tags_menu(cluster)]
+        )
 
     def init_ui(self):
         self.frame = widgets.QGroupBox()
         self.frame.setLayout(self.layout)
         self.setWidget(self.frame)
         self.setWidgetResizable(True)
-        self.setFixedWidth(350)
+        self.setFixedWidth(360)
 
 
 class ClusterInfo(widgets.QWidget):
@@ -270,11 +307,14 @@ class ClusterInfo(widgets.QWidget):
         self.ax_isi.patch.set_alpha(0.0)
         self.ax_psth = fig.add_axes([0.66, 0, 0.34, 1])
         self.ax_psth.patch.set_alpha(0.0)
+        self.fr_label = self.ax_wf.text(0, self.ax_wf.get_ylim()[0], "",
+                horizontalalignment="left", verticalalignment="bottom")
         clear_axes(self.ax_isi, self.ax_psth)
 
     def set_ylim(self, ylim):
         self.ylim = ylim
         self.ax_wf.set_ylim(*self.ylim)
+        self.fr_label.set_y(self.ylim[0])
 
     def setup_data(self):
         cluster = self.cluster.flatten()
@@ -295,6 +335,7 @@ class ClusterInfo(widgets.QWidget):
 
         fr = len(cluster) / (np.max(cluster.times) - np.min(cluster.times))
 
+        self.fr_label.set_text("{:.1f} Hz".format(fr))
         self.ax_wf.yaxis.set_major_locator(ticker.MultipleLocator(base=100))
         self.ax_wf.xaxis.set_major_locator(ticker.MultipleLocator(base=10))
         self.ax_wf.grid(True)
@@ -303,9 +344,6 @@ class ClusterInfo(widgets.QWidget):
             self.set_ylim(self.ax_wf.get_ylim())
         else:
             self.set_ylim(self.ylim)
-
-        self.ax_wf.text(40, self.ax_wf.get_ylim()[0], "{:.1f} Hz".format(fr),
-                horizontalalignment="right", verticalalignment="bottom")
 
         isi = np.diff(cluster.times)
         isi_violations = np.sum(isi < 0.001) / len(isi)
@@ -332,12 +370,12 @@ class ClusterInfo(widgets.QWidget):
                 linewidth=0.2)
         self.ax_isi.set_xlim(0, t_max)
 
-        if self.parent().start_times:
-            start_times = [
-                start_time for start_time in self.parent().start_times
+        if self.parent().stimuli:
+            stimuli_times = [
+                start_time for start_time in self.parent().stimuli
                 if cluster.times[0] <= start_time < cluster.times[-1]
             ]
-            psth = align(cluster.flatten(), start_times, -0.5, 1.5)
+            psth = align(cluster.flatten(), stimuli_times, -0.5, 1.5)
             hist, bin_edges = np.histogram(
                     np.concatenate(psth),
                     bins=20,

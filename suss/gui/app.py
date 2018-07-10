@@ -16,7 +16,13 @@ from suss.gui.timeseries import TimeseriesPlot
 from suss.gui.tsne import TSNEPlot
 from suss.gui.waveforms import WaveformsPlot
 from suss.gui.utils import make_color_map, get_changed_labels
-from suss.operations import delete_nodes, merge_nodes, recluster_node
+from suss.operations import (
+        add_nodes,
+        delete_nodes,
+        match_one,
+        merge_nodes,
+        recluster_node
+)
 
 
 class App(widgets.QMainWindow):
@@ -74,7 +80,7 @@ class App(widgets.QMainWindow):
             event.ignore()
 
     def init_actions(self):
-        self.load_action = widgets.QAction("Load", self)
+        self.load_action = widgets.QAction("Open...", self)
         self.save_action = widgets.QAction("Save", self)
         self.close_action = widgets.QAction("Close", self)
 
@@ -87,11 +93,11 @@ class App(widgets.QMainWindow):
 
         mainMenu = self.menuBar()
         fileMenu = mainMenu.addMenu("&File")
-        # fileMenu.setWidth(500)
 
         fileMenu.addAction(self.load_action)
+        fileMenu.addSeparator()
         fileMenu.addAction(self.save_action)
-        fileMenu.addAction(self.close_action)
+        # fileMenu.addAction(self.close_action)
 
         self.display_splash()
 
@@ -209,6 +215,8 @@ class SussViewer(widgets.QFrame):
     def __init__(self, dataset=None, parent=None):
         super().__init__(parent)
         self.stack = [("load", dataset)]
+        self.redo_stack = []
+        self.hidden = []
 
         self.selected = set()
         self._highlights_disabled = False
@@ -242,13 +250,17 @@ class SussViewer(widgets.QFrame):
 
     def init_actions(self):
         self.undo_action = widgets.QAction("Undo", self)
+        self.redo_action = widgets.QAction("Redo", self)
+        self.unhide_all_action = widgets.QAction("Reveal All", self)
         self.merge_action = widgets.QAction("Merge", self)
         self.delete_action = widgets.QAction("Delete", self)
         self.clear_action = widgets.QAction("Clear Selection", self)
         self.delete_others_action = widgets.QAction("Filter", self)
         self.select_all_action = widgets.QAction("Select All", self)
 
+        self.unhide_all_action.triggered.connect(self.unhide_all)
         self.undo_action.triggered.connect(self._undo)
+        self.redo_action.triggered.connect(self._redo)
         self.merge_action.triggered.connect(self.merge)
         self.delete_action.triggered.connect(self.delete)
         self.delete_others_action.triggered.connect(self.delete_unselected)
@@ -272,7 +284,7 @@ class SussViewer(widgets.QFrame):
         yield
         self._highlights_disabled = False
 
-    def show_right_click_menu(self, label, pos):
+    def show_right_click_menu(self, label, pos, other_menus=tuple()):
         with self.temporary_highlight(label):
             menu = widgets.QMenu()
 
@@ -292,6 +304,12 @@ class SussViewer(widgets.QFrame):
                 menu.addAction(_recluster_action)
                 _recluster_action.triggered.connect(partial(self.recluster, label))
 
+            _hide_action = widgets.QAction("Hide Cluster {}".format(label), self)
+            menu.addAction(_hide_action)
+            _hide_action.triggered.connect(partial(self.hide, label))
+
+            menu.addSeparator()
+
             _delete_action = widgets.QAction("Delete Cluster {}".format(label), self)
             menu.addAction(_delete_action)
             _delete_action.triggered.connect(partial(self._delete, [label]))
@@ -301,8 +319,18 @@ class SussViewer(widgets.QFrame):
                 menu.addAction(_delete_all_action)
                 _delete_all_action.triggered.connect(self.delete)
 
+            menu.addSeparator()
+
             if len(self.stack) > 1:
                 menu.addAction(self.undo_action)
+
+            if len(self.redo_stack) > 1:
+                menu.addAction(self.redo_action)
+
+            menu.addSeparator()
+
+            for other_menu in other_menus:
+                menu.addMenu(other_menu)
 
             menu.exec_(pos)
 
@@ -374,6 +402,9 @@ class SussViewer(widgets.QFrame):
         self.undo_action.setShortcut(gui.QKeySequence.Undo)
         self.window().addAction(self.undo_action)
 
+        self.redo_action.setShortcut(gui.QKeySequence.Redo)
+        self.window().addAction(self.redo_action)
+
         self.delete_action.setShortcut(gui.QKeySequence("Backspace"))
         self.window().addAction(self.delete_action)
 
@@ -389,16 +420,26 @@ class SussViewer(widgets.QFrame):
         self.merge_action.setShortcut(gui.QKeySequence("Ctrl+M"))
         self.window().addAction(self.merge_action)
 
-    def _enstack(self, action, dataset):
+    def _enstack(self, action, dataset, clear_redo=True):
         with self.timer_paused():
             _old_dataset = self.dataset
             with self.disable_highlighting():
+                if clear_redo:
+                    self.redo_stack = []
                 self.stack.append((action, dataset))
                 self.colors = make_color_map(self.dataset.labels)
                 self.UPDATED_CLUSTERS.emit(
                         self.dataset,
                         _old_dataset,
                 )
+
+    def _redo(self):
+        if len(self.redo_stack) == 0:
+            print("Nothing left to redo.")
+            return
+
+        last_action, _old_dataset = self.redo_stack.pop()
+        self._enstack(last_action, _old_dataset, clear_redo=False)
 
     def _undo(self):
         if len(self.stack) == 1:
@@ -407,6 +448,7 @@ class SussViewer(widgets.QFrame):
 
         with self.timer_paused():
             last_action, _old_dataset = self.stack.pop()
+            self.redo_stack.append((last_action, _old_dataset))
 
             new_labels = set(self.dataset.labels)
             changed_labels = get_changed_labels(self.dataset, _old_dataset)
@@ -444,6 +486,18 @@ class SussViewer(widgets.QFrame):
         else:
             self.selected = set(self.dataset.labels)
         self.CLUSTER_SELECT.emit(self.selected, _old_selected)
+
+    def hide(self, label):
+        selector = match_one(self.dataset, label=label)
+        node = self.dataset.nodes[selector][0]
+        self.hidden.append(node)
+
+        self._delete([label], action="hide")
+
+    def unhide_all(self):
+        _new_dataset = add_nodes(self.dataset, *self.hidden)
+        self.hidden = []
+        self._enstack("unhide", _new_dataset)
 
     def merge(self):
         if len(self.selected) < 2:
@@ -501,12 +555,16 @@ class SussViewer(widgets.QFrame):
         self.CLUSTER_HIGHLIGHT.emit(None, self.highlighted, False)
 
     def init_ui(self):
+        self.edit_menu.addAction(self.undo_action)
+        self.edit_menu.addAction(self.redo_action)
+        self.edit_menu.addSeparator()
+        self.edit_menu.addAction(self.unhide_all_action)
         self.edit_menu.addAction(self.select_all_action)
+        self.edit_menu.addAction(self.clear_action)
+        self.edit_menu.addSeparator()
         self.edit_menu.addAction(self.merge_action)
         self.edit_menu.addAction(self.delete_action)
         self.edit_menu.addAction(self.delete_others_action)
-        self.edit_menu.addAction(self.clear_action)
-        self.edit_menu.addAction(self.undo_action)
 
         self.on_dataset_changed()
         # self.cluster_selector = ClusterSelector(parent=self)

@@ -43,6 +43,27 @@ class BaseDataset(object):
         self._data.sort(order="ids")
         self.data_column = data_column
 
+        # List of Tag objects for this dataset or cluster
+        # Only applies to this object! does not propogate
+        # to subclusters, derived datasets, flatten(), etc...
+        self._tags = set()
+
+    @property
+    def tags(self):
+        if not hasattr(self, "_tags"):
+            self._tags = set()
+        return self._tags
+
+    def add_tag(self, tag):
+        if not hasattr(self, "_tags"):
+            self._tags = set()
+        self._tags.add(tag)
+
+    def remove_tag(self, tag):
+        if not hasattr(self, "_tags"):
+            self._tags = set()
+        return self._tags.remove(tag)
+
     # Set the data_column string as an accessible property
     def _get_data_column(self):
         if not self.has_children:
