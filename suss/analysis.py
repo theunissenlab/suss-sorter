@@ -11,11 +11,13 @@ import numpy as np
 
 def align(cluster, stimulus_times, t_start, t_stop):
     aligned_spikes = []
+    aligned_waveforms = []
     for stimulus_time in stimulus_times:
         _t_start = stimulus_time + t_start
         _t_stop = stimulus_time + t_stop
         window = cluster.select((cluster.times >= _t_start) & (cluster.times < _t_stop))
 
         aligned_spikes.append(window.times - stimulus_time)
+        aligned_waveforms.append(window.waveforms)
 
-    return np.array(aligned_spikes)
+    return np.array(aligned_spikes), np.array(aligned_waveforms)

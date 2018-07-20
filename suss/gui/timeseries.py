@@ -9,13 +9,13 @@ from sklearn.decomposition import PCA
 
 class TimeseriesPlot(widgets.QFrame):
 
-    ndim = 1
+    ndim = 2
 
     def __init__(self, size=(700, 100), parent=None):
         super().__init__(parent)
         self.size = size
 
-        self._rotation_period = 800
+        self._rotation_period = 100
         self.setup_plots()
         self.setup_data()
         self.init_ui()
@@ -56,12 +56,14 @@ class TimeseriesPlot(widgets.QFrame):
         self.axes = []
         for dim in range(self.ndim):
             ax = fig.add_axes(
-                [0, 0.1 + (0.9 / self.ndim) * dim, 1, 0.9 / self.ndim],
+                [0, 0.2 + (0.8 / self.ndim) * dim, 1, 0.8 / self.ndim],
                 facecolor="#111111"
             )
             ax.set_yticks([])
             ax.patch.set_alpha(0.8)
             self.axes.append(ax)
+
+        self.axes[0].xaxis.set_tick_params(rotation=45, labelsize=8)
 
         for ax in self.axes[1:]:
             ax.set_yticks([])

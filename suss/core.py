@@ -143,8 +143,8 @@ class BaseDataset(object):
 
     @property
     def centroid(self):
-        """Representative datapoint is the median"""
-        return np.median(getattr(self, self.data_column), axis=0)
+        """Representative datapoint is the mean"""
+        return np.mean(getattr(self, self.data_column), axis=0)
 
     @property
     def time(self):

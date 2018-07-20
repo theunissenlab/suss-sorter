@@ -283,7 +283,7 @@ def time_vs_1d(
         ax = fig.add_axes(
             [0, idx / len(projections), 1, 1 / len(projections)]
         )
-        ax.axis("off")
+        # ax.axis("off")
 
         if background_dataset:
             ax.scatter(

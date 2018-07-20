@@ -37,7 +37,7 @@ class BackgroundTSNE(QObject):
 
     @pyqtSlot()
     def computeTSNE(self):
-        tsne = tsne_time(self.dataset)
+        tsne = tsne_time(self.dataset, t_scale=1 * 60.0 * 60.0)
         # tsne = TSNE(n_components=2).fit_transform(self.dataset)
         print("Computed TSNE")
         self.finished.emit(tsne)

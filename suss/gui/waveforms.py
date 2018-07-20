@@ -51,9 +51,6 @@ class WaveformsPlot(widgets.QFrame):
             return
 
     def on_cluster_select(self, selected, old_selected):
-        if None in selected:
-            print("SOMNWHOW NONE GOT IN SELECTED")
-
         self.ax.clear()
         self.ax.patch.set_alpha(0.8)
         self.highlight_plot = None
@@ -64,13 +61,9 @@ class WaveformsPlot(widgets.QFrame):
             try:
                 node = self.dataset.nodes[self.dataset.labels == label][0]
             except:
-                # FIXME (kevin): haven't fiugred out this bug...
-                # but don't want it to crash
-                print("An error occured")
-                print("Couldnt find", label, "in", self.dataset.labels)
                 continue
             mean = node.centroid
-            std = np.std(node.waveforms, axis=0)
+            std = np.std(node.flatten().waveforms, axis=0)
 
             self.ax.fill_between(
                 np.arange(len(mean)),

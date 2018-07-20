@@ -204,6 +204,7 @@ class SussViewer(widgets.QFrame):
     """
 
     minimum_size = (1000, 500)
+    animation_period = 100.0
 
     # Emits the new dataset object and the old dataset object
     UPDATED_CLUSTERS = pyqtSignal(object, object)
@@ -223,7 +224,7 @@ class SussViewer(widgets.QFrame):
         self.highlighted = None
 
         self.animation_timer = QTimer()
-        self.animation_timer.start(10.0)
+        self.animation_timer.start(self.animation_period)
 
         main_menu = self.parent().menuBar()
         self.edit_menu = main_menu.addMenu("&Edit")
@@ -275,7 +276,7 @@ class SussViewer(widgets.QFrame):
         if prev_highlight in self.dataset.labels:
             self.set_highlight(prev_highlight, temporary=True)
         else:
-            pass
+            self.set_highlight(None, temporary=True)
 
     @contextmanager
     def disable_highlighting(self):
@@ -396,7 +397,7 @@ class SussViewer(widgets.QFrame):
     def timer_paused(self):
         self.animation_timer.stop()
         yield
-        self.animation_timer.start(10.0)
+        self.animation_timer.start(self.animation_period)
 
     def setup_shortcuts(self):
         self.undo_action.setShortcut(gui.QKeySequence.Undo)

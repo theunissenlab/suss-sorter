@@ -21,7 +21,7 @@ setup(
         "matplotlib==2.2.2",
         "numpy==1.14.3",
         "scipy==1.1.0",
-        "sklearn==0.0",
+        "sklearn==0.20",
     ],
     extras_require={
         "notebooks": ["jupyter==1.0.0"],

@@ -62,6 +62,8 @@ def create_check_button(text):
 
 class ClusterSelector(widgets.QScrollArea):
 
+    CARD_HEIGHT = 130
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.allow_scroll_to = True
@@ -167,20 +169,31 @@ class ClusterSelector(widgets.QScrollArea):
 
             header = widgets.QHBoxLayout()
             header_label = widgets.QLabel(
-                "<b>{}</b> (n={}) {}".format(
+                "<b>{}</b> (n={}) {} clusters".format(
                     cluster_label,
                     cluster.count,
                     len(cluster.nodes)
                 )
             )
+            header_label.setFixedHeight(14)
             check_button = create_check_button(" ")
             check_button.clicked[bool].connect(partial(self.toggle, cluster_label))
             check_button.hover.connect(partial(self.set_highlight, cluster_label))
             self.buttons[cluster_label] = check_button
             header.addWidget(check_button)
             header.addWidget(header_label)
+            header_label.setStyleSheet("""
+                QLabel {
+                    border:none;
+                    padding:0;
+                    margin:0;
+                    font-size: 12px;
+                }
+            """)
 
-            pixmap = gui.QPixmap(10, 90)
+            header.setAlignment(Qt.AlignTop)
+
+            pixmap = gui.QPixmap(10, self.CARD_HEIGHT)
             pixmap.fill(gui.QColor(*[
                 255 * c
                 for c in self.colors[cluster_label]
@@ -225,6 +238,7 @@ class ClusterSelector(widgets.QScrollArea):
             container.customContextMenuRequested.connect(
                 partial(self.on_click, container, cluster, cluster_label)
             )
+            container.setFixedHeight(self.CARD_HEIGHT)
 
             self.layout.addWidget(container)
             self.panels[cluster_label] = container
@@ -236,25 +250,15 @@ class ClusterSelector(widgets.QScrollArea):
         menu = widgets.QMenu("Tags")
 
         for _tag in ClusterTag:
-            _act = widgets.QAction(str(_tag), self)
-            _act.setCheckable(True)
-            _act.setChecked(_tag in cluster.tags)
-            _act.toggled.connect(partial(self._update_tag, cluster, _tag))
+            _checkbox = widgets.QCheckBox(_tag.name, menu)
+            _act = widgets.QWidgetAction(menu)
+            _act.setDefaultWidget(_checkbox)
+            # _act.setCheckable(True)
+            _checkbox.setChecked(_tag in cluster.tags)
+            _checkbox.toggled.connect(partial(self._update_tag, cluster, _tag))
             menu.addAction(_act)
 
         return menu
-
-    def draw_tags(self, tags_frame, cluster):
-        tags_layout = widgets.QHBoxLayout()
-        if not cluster.tags:
-            tags_layout.addWidget(widgets.QLabel("No tags"))
-        else:
-            for tag in cluster.tags:
-                tags_layout.addWidget(widgets.QLabel(
-                    "{}".format(tag)
-                ))
-        QObjectCleanupHandler().add(tags_frame.layout())
-        tags_frame.setLayout(tags_layout)
 
     def _update_tag(self, cluster, _tag, state):
         if state and _tag not in cluster.tags:
@@ -279,7 +283,7 @@ class ClusterSelector(widgets.QScrollArea):
 
 class ClusterInfo(widgets.QWidget):
 
-    def __init__(self, cluster, color, size=(250, 75), ylim=None, parent=None):
+    def __init__(self, cluster, color, size=(265, 75), ylim=None, parent=None):
         super().__init__(parent)
         self.cluster = cluster
         self.color = color
@@ -375,24 +379,25 @@ class ClusterInfo(widgets.QWidget):
                 start_time for start_time in self.parent().stimuli
                 if cluster.times[0] <= start_time < cluster.times[-1]
             ]
-            psth = align(cluster.flatten(), stimuli_times, -0.5, 1.5)
-            hist, bin_edges = np.histogram(
-                    np.concatenate(psth),
-                    bins=20,
-                    density=False,
-                    range=(-0.5, 1.5))
-            self.ax_psth.bar(
-                    (bin_edges[:-1] + bin_edges[1:]) / 2,
-                    hist / len(psth),
-                    width=2 / 20.0,
-                    color="Black")
-            self.ax_psth.vlines(
-                    [0.5],
-                    *self.ax_psth.get_ylim(),
-                    color="Red",
-                    linestyle="--",
-                    linewidth=0.5,
-            )
+            psth, _ = align(cluster.flatten(), stimuli_times, -0.5, 1.5)
+            if len(psth):
+                hist, bin_edges = np.histogram(
+                        np.concatenate(psth),
+                        bins=20,
+                        density=False,
+                        range=(-0.5, 1.5))
+                self.ax_psth.bar(
+                        (bin_edges[:-1] + bin_edges[1:]) / 2,
+                        hist / len(psth),
+                        width=2 / 20.0,
+                        color="Black")
+                self.ax_psth.vlines(
+                        [0.5],
+                        *self.ax_psth.get_ylim(),
+                        color="Red",
+                        linestyle="--",
+                        linewidth=0.5,
+                )
             # self.ax_psth.set_ylim(0, 20.0)
 
         peaks = np.min(cluster.waveforms, axis=1)
