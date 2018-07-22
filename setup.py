@@ -28,7 +28,7 @@ setup(
     ],
     dependency_links=[
         "git+https://github.com/scikit-learn/scikit-learn.git@813d7d#egg=scikit-learn-0.20dev",
-        "git+https://github.com/DmitryUlyanov/Multicore-TSNE.git@d4ff4a#egg=MulticoreTSNE-0.1"
+        "git+https://github.com/DmitryUlyanov/Multicore-TSNE.git@d4ff4a#egg=multicoretsne-0.1"
     ],
     extras_require={
         "notebooks": ["jupyter==1.0.0"],

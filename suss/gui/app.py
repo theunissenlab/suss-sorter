@@ -131,7 +131,7 @@ class App(widgets.QMainWindow):
         selected_file, _ = widgets.QFileDialog.getOpenFileName(
             self,
             "Load dataset",
-            ".",
+            config.BASE_DIRECTORY or ".",
             "(*.pkl)",
             options=options)
 
