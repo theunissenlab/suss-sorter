@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name="suss",
-    version="0.0-alpha",
+    version="0.1-alpha",
     packages=["suss"],
     description=("Automated spike sorting for single channel electrophysiology"),
     author="Kevin Yu",
@@ -17,11 +17,17 @@ setup(
         "Topic :: Scientific/Engineering"
     ],
     install_requires=[
-        "hdbscan==0.8.13",
-        "matplotlib==2.2.2",
         "numpy==1.14.3",
+        "Cython==0.28.4",
+        # "hdbscan==0.8.13",
+        "matplotlib==2.2.2",
         "scipy==1.1.0",
-        "sklearn==0.20",
+        # "sklearn==0.20",
+        "networkx==2.1",
+    ],
+    dependency_links=[
+        "git://github.com/scikit-learn/scikit-learn.git@813d7d#egg=sklearn-0.20dev",
+        "git://github.com/DmitryUlyanov/Multicore-TSNE.git@d4ff4a#egg=MulticoreTSNE-0.1"
     ],
     extras_require={
         "notebooks": ["jupyter==1.0.0"],

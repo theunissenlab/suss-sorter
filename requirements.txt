@@ -7,8 +7,10 @@ PyQt5==5.10.1
 scipy==1.1.0
 networkx==2.1
 # sklearn==0.20
+Cython==0.28.4
 
 # MulticoreTSNE
--e git://github.com/DmitryUlyanov/Multicore-TSNE.git@d4ff4a#egg=MulticoreTSNE
+-e git://github.com/DmitryUlyanov/Multicore-TSNE.git@d4ff4a#egg=MulticoreTSNE-0.1
+
 # Need pre-release sklearn for weighted kmeans
--e git://github.com/scikit-learn/scikit-learn.git@813d7d#egg=sklearn
+-e git://github.com/scikit-learn/scikit-learn.git@813d7d#egg=sklearn-0.20dev
