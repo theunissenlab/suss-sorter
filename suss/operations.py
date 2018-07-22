@@ -4,7 +4,7 @@ import numpy as np
 from sklearn.cluster import KMeans
 
 from suss.core import ClusterDataset, SubDataset
-from suss.sort import pca_time, cleanup_clusters, tsne_time
+from suss.sort import pca_time, cleanup_clusters, tsne_time, _vote_on_labels
 
 
 def force_single_kwarg(**kwargs):
@@ -131,6 +131,7 @@ def recluster_node(dataset, node=None, idx=None, label=None):
     weight = np.array([node.count for node in selected_data.nodes])
 
     # Reassociate that data with new labels
+    # labels = _vote_on_labels(selected_data)
     kmeans = KMeans(n_clusters=4).fit(cluster_on, sample_weight=weight)
     labels = kmeans.predict(cluster_on, sample_weight=weight)
     labels = cleanup_clusters(cluster_on, labels, n_neighbors=3)
