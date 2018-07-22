@@ -17,17 +17,18 @@ setup(
         "Topic :: Scientific/Engineering"
     ],
     install_requires=[
-        "numpy==1.14.3",
-        "Cython==0.28.4",
+        "numpy>=1.14.0",
+        "Cython>=0.28.2",
         # "hdbscan==0.8.13",
-        "matplotlib==2.2.2",
-        "scipy==1.1.0",
-        # "sklearn==0.20",
+        "matplotlib>=2.0.2",
+        "scipy>=0.19.0",
+        "scikit-learn==0.20dev0",
+        "MulticoreTSNE==0.1",
         "networkx==2.1",
     ],
     dependency_links=[
-        "git://github.com/scikit-learn/scikit-learn.git@813d7d#egg=sklearn-0.20dev",
-        "git://github.com/DmitryUlyanov/Multicore-TSNE.git@d4ff4a#egg=MulticoreTSNE-0.1"
+        "git+https://github.com/scikit-learn/scikit-learn.git@813d7d#egg=scikit-learn-0.20dev",
+        "git+https://github.com/DmitryUlyanov/Multicore-TSNE.git@d4ff4a#egg=MulticoreTSNE-0.1"
     ],
     extras_require={
         "notebooks": ["jupyter==1.0.0"],
