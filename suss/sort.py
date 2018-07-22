@@ -52,7 +52,7 @@ def remove_outliers(mknn, n_neighbors=10, edges=1):
 
 def label_outliers(X, n_neighbors=10):
     mknn = get_mknn(X)
-    mknn = remove_outliers(mknn, n_neighbors=20, edges=2)
+    mknn = remove_outliers(mknn, n_neighbors=n_neighbors, edges=2)
     labels = np.ones(len(X))
     labels[np.array(mknn)] = 0
     return mknn, labels
@@ -640,7 +640,7 @@ def sort(denoised):
     denoised_pcaed = pca_time(denoised, t_scale=6 * 60 * 60, pcs=3)
     # denoised_pcaed = scipy.stats.zscore(denoised_pcaed, axis=0)
 
-    _, _, outliers = label_outliers(denoised_pcaed, n_neighbors=2)
+    _, outliers = label_outliers(denoised_pcaed, n_neighbors=2)
 
     denoised = denoised.select(outliers == 0)
 
