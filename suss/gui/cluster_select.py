@@ -1,4 +1,5 @@
 import os
+import sys
 from functools import partial
 
 import numpy as np
@@ -62,7 +63,7 @@ def create_check_button(text):
 
 class ClusterSelector(widgets.QScrollArea):
 
-    CARD_HEIGHT = 130
+    CARD_HEIGHT = 160 if sys.platform == "darwin" else 130
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -129,6 +130,7 @@ class ClusterSelector(widgets.QScrollArea):
         else:
             self.show_auditory_responses = state
             self.setup_data()
+            self.init_ui()
 
     def on_cluster_highlight(self, new_highlight, old_highlight, temporary):
         if old_highlight is not None and old_highlight in self.panels:
