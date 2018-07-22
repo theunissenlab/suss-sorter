@@ -274,7 +274,7 @@ class SussViewer(widgets.QFrame):
         self.show_auditory_action.triggered.connect(self.toggle_auditory)
 
     def toggle_auditory(self, state):
-        self.AUDITORY_REPSONSES.emit(state)
+        self.AUDITORY_RESPONSES.emit(state)
 
     @contextmanager
     def temporary_highlight(self, label):

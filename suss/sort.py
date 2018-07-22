@@ -643,6 +643,7 @@ def sort(denoised):
     _, outliers = label_outliers(denoised_pcaed, n_neighbors=2)
 
     denoised = denoised.select(outliers == 0)
+    denoised_pcaed = pca_time(denoised, t_scale=6 * 60 * 60, pcs=3)
 
     labels = []
     for _ in range(4):
