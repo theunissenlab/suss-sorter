@@ -3,7 +3,7 @@ from PyQt5 import QtWidgets as widgets
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
-import config
+import suss.gui.config as config
 
 
 class ISIPlot(widgets.QFrame):

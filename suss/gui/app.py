@@ -212,6 +212,7 @@ class SussViewer(widgets.QFrame):
     CLUSTER_SELECT = pyqtSignal(set, set)
     # Emits an integer label for the cluster that should be highlighted and previous
     CLUSTER_HIGHLIGHT = pyqtSignal(object, object, bool)
+    AUDITORY_RESPONSES = pyqtSignal(bool)
 
     def __init__(self, dataset=None, parent=None):
         super().__init__(parent)
@@ -228,6 +229,7 @@ class SussViewer(widgets.QFrame):
 
         main_menu = self.parent().menuBar()
         self.edit_menu = main_menu.addMenu("&Edit")
+        self.tools_menu = main_menu.addMenu("&Tools")
         self.history_menu = main_menu.addMenu("&History")
 
         self.init_actions()
@@ -258,6 +260,8 @@ class SussViewer(widgets.QFrame):
         self.clear_action = widgets.QAction("Clear Selection", self)
         self.delete_others_action = widgets.QAction("Filter", self)
         self.select_all_action = widgets.QAction("Select All", self)
+        self.show_auditory_action = widgets.QAction("Compute Sound Triggered PSTH", self, checkable=True)
+        self.show_auditory_action.setChecked(False)
 
         self.unhide_all_action.triggered.connect(self.unhide_all)
         self.undo_action.triggered.connect(self._undo)
@@ -267,6 +271,10 @@ class SussViewer(widgets.QFrame):
         self.delete_others_action.triggered.connect(self.delete_unselected)
         self.clear_action.triggered.connect(self.clear)
         self.select_all_action.triggered.connect(self.select_all)
+        self.show_auditory_action.triggered.connect(self.toggle_auditory)
+
+    def toggle_auditory(self, state):
+        self.AUDITORY_REPSONSES.emit(state)
 
     @contextmanager
     def temporary_highlight(self, label):
@@ -566,6 +574,8 @@ class SussViewer(widgets.QFrame):
         self.edit_menu.addAction(self.merge_action)
         self.edit_menu.addAction(self.delete_action)
         self.edit_menu.addAction(self.delete_others_action)
+
+        self.tools_menu.addAction(self.show_auditory_action)
 
         self.on_dataset_changed()
         # self.cluster_selector = ClusterSelector(parent=self)

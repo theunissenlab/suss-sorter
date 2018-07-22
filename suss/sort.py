@@ -1,11 +1,16 @@
 import time
 
 import hdbscan
+import networkx as nx
 import numpy as np
 import scipy.stats
+from scipy import integrate
+from scipy.sparse import csr_matrix
+from scipy.sparse.csgraph import minimum_spanning_tree
 from sklearn.cluster import MiniBatchKMeans as KMeans
 from sklearn.decomposition import PCA
-from sklearn.neighbors import KNeighborsClassifier, NearestNeighbors
+from sklearn.neighbors import KNeighborsClassifier, NearestNeighbors, kneighbors_graph
+from sklearn.mixture import BayesianGaussianMixture
 
 try:
     from MulticoreTSNE import MulticoreTSNE as TSNE
@@ -13,16 +18,6 @@ except ImportError:
     from sklearn.manifold import TSNE
 
 from .core import SpikeDataset
-
-import networkx as nx
-import numpy as np
-from scipy import integrate
-
-from scipy.sparse import csr_matrix
-from scipy.sparse.csgraph import minimum_spanning_tree
-from sklearn.neighbors import kneighbors_graph
-import networkx as nx
-
 
 
 def threshold_graph(g, threshold):
@@ -35,6 +30,33 @@ def threshold_graph(g, threshold):
 
 def get_weights(graph):
     return [graph[i][j]["weight"] for i, j in graph.edges]
+
+
+def get_mknn(X, n_neighbors=10):
+    _dist = scipy.spatial.distance_matrix(X, X)
+    spanning = minimum_spanning_tree(_dist).toarray()
+    knn = kneighbors_graph(X, n_neighbors=n_neighbors, mode="distance").toarray()
+    knn = knn * (knn.T > 0)
+    knn[knn == 0] = spanning[knn == 0]
+    return nx.from_numpy_array(knn)
+
+
+def remove_outliers(mknn, n_neighbors=10, edges=1):    
+    degs = [n for n, d in mknn.degree() if d < edges + 1]
+    while len(degs):
+        mknn.remove_nodes_from(degs)
+        degs = [n for n, d in mknn.degree() if d < edges + 1]
+
+    return mknn
+
+
+def label_outliers(X, n_neighbors=10):
+    mknn = get_mknn(X)
+    mknn = remove_outliers(mknn, n_neighbors=20, edges=2)
+    labels = np.ones(len(X))
+    labels[np.array(mknn)] = 0
+    return mknn, labels
+
 
 class Node(object):
     def __init__(self, ids, level=0, parent=None):
@@ -314,11 +336,11 @@ def cluster_step(
                     clusterer.fit(window_data.waveforms, sample_weight=weights)
                     labels = clusterer.predict(window_data.waveforms, sample_weight=weights)
                 elif mode == "spc":
-                    clusterer = SPC()
-                    tsned = tsne_time(window_data)
+                    clusterer = SPC(n_neighbors=5)
+                    tsned = PCA(n_components=6).fit_transform(window_data.waveforms)
                     clusterer.fit(tsned)
                     result = clusterer.create_hierarchy()
-                    result = clusterer.collapse(result, threshold=100.0)
+                    result = clusterer.collapse(result, threshold=30.0)
                     labels = result.labels()
 
                 for label, count in zip(*np.unique(labels, return_counts=True)):
@@ -509,34 +531,21 @@ def flip_points(data, labels, flippable, n_neighbors=10, create_labels=False):
         return labels
 
 
-def tsne_time(dataset, perplexity=30, t_scale=1 * 60 * 60, pcs=12):
-    # tsned = TSNE(n_components=2, perplexity=perplexity).fit_transform(
-    #     PCA(n_components=pcs).fit_transform(dataset.waveforms)
-    # )
-    tsned = PCA(n_components=pcs).fit_transform(dataset.waveforms)
-    wf_arr = scipy.stats.zscore(tsned) #, axis=0)
+def tsne_time(dataset, perplexity=30, t_scale=2 * 60 * 60, pcs=12):
+    pcaed = PCA(n_components=pcs).fit_transform(dataset.waveforms)
+    wf_arr = scipy.stats.zscore(pcaed)
     t_arr = dataset.times / t_scale
     t_arr = t_arr - np.mean(t_arr)
-
-    meh = TSNE(
-            n_components=2,
-            perplexity=perplexity,
-            n_iter=2000,
-            n_iter_without_progress=500
-    ).fit_transform(np.hstack([wf_arr, t_arr[:, None]]))
-    meh = scipy.stats.zscore(meh)
 
     return TSNE(
             n_components=2,
             perplexity=perplexity,
-            n_iter=2000,
+            n_iter=5000,
             n_iter_without_progress=500
-    ).fit_transform(np.hstack([meh, t_arr[:, None]]))
+    ).fit_transform(np.hstack([wf_arr, t_arr[:, None]]))
 
 
-
-
-def pca_time(dataset, t_scale=1 * 60 * 60, pcs=6):
+def pca_time(dataset, t_scale=2 * 60 * 60, pcs=6):
     pcaed = PCA(n_components=pcs).fit_transform(dataset.waveforms)
     wf_arr = scipy.stats.zscore(pcaed, axis=0)
     t_arr = dataset.times / t_scale
@@ -594,6 +603,15 @@ def whittle(dataset, n=10):
 
 
 def denoise(times, waveforms):
+    threshold = np.log(0.001)
+
+    pcaed = PCA(n_components=2).fit_transform(waveforms)
+    pcaed = scipy.stats.zscore(pcaed, axis=0)
+    mix = BayesianGaussianMixture(n_components=2).fit(pcaed)
+    logprob = mix.score_samples(pcaed)
+    times = times[logprob > threshold]
+    waveforms = waveforms[logprob > threshold]
+
     denoised = denoising_sort(times, waveforms)
     # denoised = denoised.select([isi(n) < 0.05 for n in denoised.nodes])
 
@@ -609,17 +627,22 @@ def denoise(times, waveforms):
 
 
 def _vote_on_labels(dataset):
-    tsned = tsne_time(dataset, pcs=12, t_scale=1 * 60 * 60)
+    tsned = tsne_time(dataset, pcs=6, t_scale=2 * 60 * 60)
     spc = SPC(n_neighbors=min(10, len(dataset) - 1))
     spc.fit(tsned)
     result = spc.create_hierarchy()
-    result = spc.collapse(result, threshold=30.0)
+    result = spc.collapse(result, threshold=20.0)
     labels = result.labels()
-    return cleanup_clusters(tsned, labels, n_neighbors=5)
+    return cleanup_clusters(tsned, labels, n_neighbors=3)
 
 
 def sort(denoised):
-    pcaed = pca_time(denoised, pcs=12, t_scale=1 * 60 * 60)
+    denoised_pcaed = pca_time(denoised, t_scale=6 * 60 * 60, pcs=3)
+    # denoised_pcaed = scipy.stats.zscore(denoised_pcaed, axis=0)
+
+    _, _, outliers = label_outliers(denoised_pcaed, n_neighbors=2)
+
+    denoised = denoised.select(outliers == 0)
 
     labels = []
     for _ in range(4):
@@ -639,8 +662,6 @@ def sort(denoised):
         if count == 1:
             final_labels[final_labels == label] = -1
 
-    final_labels = cleanup_clusters(pcaed, final_labels, n_neighbors=5)
-    final_labels = cleanup_clusters(pcaed, final_labels, n_neighbors=5)
+    final_labels = cleanup_clusters(denoised_pcaed, final_labels, n_neighbors=5)
+    final_labels = cleanup_clusters(denoised_pcaed, final_labels, n_neighbors=5)
     return denoised.cluster(final_labels)
-
-

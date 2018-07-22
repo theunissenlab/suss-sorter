@@ -13,7 +13,7 @@ from suss.analysis import align
 from suss.gui.utils import clear_axes, get_changed_labels 
 from suss.tags import ClusterTag
 
-import config
+import suss.gui.config as config
 
 
 class HoverButton(widgets.QPushButton):
@@ -68,6 +68,7 @@ class ClusterSelector(widgets.QScrollArea):
         super().__init__(parent)
         self.allow_scroll_to = True
         self._cached_cluster_info = {}
+        self.show_auditory_responses = False
 
         # TOOD (kevin): make this configurable
         vocal_period_file = os.path.join(
@@ -87,6 +88,7 @@ class ClusterSelector(widgets.QScrollArea):
         self.parent().UPDATED_CLUSTERS.connect(self.reset)
         self.parent().CLUSTER_SELECT.connect(self.update_checks)
         self.parent().CLUSTER_HIGHLIGHT.connect(self.on_cluster_highlight)
+        self.parent().AUDITORY_RESPONSES.connect(self.on_auditory_responses)
 
     def reset(self, new_dataset, old_dataset):
         old_scroll = self.verticalScrollBar().value()
@@ -120,6 +122,13 @@ class ClusterSelector(widgets.QScrollArea):
         for label, button in self.buttons.items():
             button.clicked.emit(label in selected)
             button.setChecked(label in selected)
+
+    def on_auditory_responses(self, state):
+        if state == self.show_auditory_responses:
+            return
+        else:
+            self.show_auditory_responses = state
+            self.setup_data()
 
     def on_cluster_highlight(self, new_highlight, old_highlight, temporary):
         if old_highlight is not None and old_highlight in self.panels:
@@ -374,22 +383,22 @@ class ClusterInfo(widgets.QWidget):
                 linewidth=0.2)
         self.ax_isi.set_xlim(0, t_max)
 
-        if self.parent().stimuli:
+        if self.parent().show_auditory_responses and self.parent().stimuli:
             stimuli_times = [
                 start_time for start_time in self.parent().stimuli
                 if cluster.times[0] <= start_time < cluster.times[-1]
             ]
-            psth, _ = align(cluster.flatten(), stimuli_times, -0.5, 1.5)
+            psth, _ = align(cluster.flatten(), stimuli_times, 0, 1)
             if len(psth):
                 hist, bin_edges = np.histogram(
                         np.concatenate(psth),
                         bins=20,
                         density=False,
-                        range=(-0.5, 1.5))
+                        range=(0, 1))
                 self.ax_psth.bar(
                         (bin_edges[:-1] + bin_edges[1:]) / 2,
                         hist / len(psth),
-                        width=2 / 20.0,
+                        width=1 / 20.0,
                         color="Black")
                 self.ax_psth.vlines(
                         [0.5],
@@ -398,10 +407,7 @@ class ClusterInfo(widgets.QWidget):
                         linestyle="--",
                         linewidth=0.5,
                 )
-            # self.ax_psth.set_ylim(0, 20.0)
 
-        peaks = np.min(cluster.waveforms, axis=1)
-        hist, bin_edges = np.histogram(peaks, bins=50, density=True, range=(-200, 0))
         self.canvas.draw_idle()
 
     def init_ui(self):
