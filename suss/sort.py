@@ -1,6 +1,6 @@
 import time
 
-import hdbscan
+# import hdbscan
 import networkx as nx
 import numpy as np
 import scipy.stats
@@ -506,6 +506,8 @@ def cleanup_clusters(data, labels, n_neighbors=20):
 
 
 def flip_points(data, labels, flippable, n_neighbors=10, create_labels=False):
+    raise Exception("Currently not in use")
+
     if np.sum(flippable) == 0:
         return labels
     if create_labels:
@@ -568,6 +570,7 @@ def is_isolated(labels, quality_dict, min_count=12, min_isolation=0.99):
 def whittle(dataset, n=10):
     """Whittle down a dataset to find isolated clusters
     """
+    raise Exception("Currently not in use")
     temp_dataset = dataset
     final_labels = -1 * np.ones(len(dataset)).astype(np.int)
     cluster_size = 6
