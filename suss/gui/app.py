@@ -9,6 +9,7 @@ from PyQt5 import QtGui as gui
 
 import suss.io
 
+import suss.gui.config as config
 from suss.gui.cluster_select import ClusterSelector
 from suss.gui.isi import ISIPlot
 from suss.gui.projections import ProjectionsPlot
