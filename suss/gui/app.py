@@ -245,6 +245,7 @@ class SussViewer(widgets.QFrame):
     def on_close_dataset(self):
         main_menu = self.parent().menuBar()
         main_menu.removeAction(self.edit_menu.menuAction())
+        main_menu.removeAction(self.tools_menu.menuAction())
         main_menu.removeAction(self.history_menu.menuAction())
 
     def update_menu_bar(self):
