@@ -12,7 +12,7 @@ from matplotlib import ticker
 
 from suss.analysis import align
 from suss.gui.utils import clear_axes, get_changed_labels 
-from suss.tags import ClusterTag
+from suss.gui.tags import ClusterTag, UserTag
 
 import suss.gui.config as config
 
@@ -263,6 +263,15 @@ class ClusterSelector(widgets.QScrollArea):
         menu = widgets.QMenu("Tags")
 
         for _tag in ClusterTag:
+            _checkbox = widgets.QCheckBox(_tag.name, menu)
+            _act = widgets.QWidgetAction(menu)
+            _act.setDefaultWidget(_checkbox)
+            # _act.setCheckable(True)
+            _checkbox.setChecked(_tag in cluster.tags)
+            _checkbox.toggled.connect(partial(self._update_tag, cluster, _tag))
+            menu.addAction(_act)
+
+        for _tag in UserTag:
             _checkbox = widgets.QCheckBox(_tag.name, menu)
             _act = widgets.QWidgetAction(menu)
             _act.setDefaultWidget(_checkbox)
