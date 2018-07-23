@@ -128,7 +128,7 @@ class App(widgets.QMainWindow):
 
     def run_file_loader(self):
         options = widgets.QFileDialog.Options()
-        options |= widgets.QFileDialog.DontUseNativeDialog
+        # options |= widgets.QFileDialog.DontUseNativeDialog
         selected_file, _ = widgets.QFileDialog.getOpenFileName(
             self,
             "Load dataset",
@@ -147,10 +147,12 @@ class App(widgets.QMainWindow):
         options = widgets.QFileDialog.Options()
         options |= widgets.QFileDialog.DontUseNativeDialog
         default_name = self.current_file.replace("sorted", "curated")
+        dir_name, base_name = os.path.split(default_name)
+        default_save_path = os.path.join(dir_name, config.DEFAULT_SAVE_LOCATION, base_name)
         filename, _ = widgets.QFileDialog.getSaveFileName(
             self,
             "Save dataset",
-            default_name,
+            default_save_path,
             "(*.pkl)",
             options=options)
 

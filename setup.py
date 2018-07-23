@@ -20,7 +20,7 @@ setup(
         "numpy>=1.14.0",
         "Cython>=0.28.2",
         # "hdbscan==0.8.13",
-        "matplotlib>=2.0.2",
+        "matplotlib>=2.2.2",
         "scipy>=0.19.0",
         "scikit-learn==0.20dev0",
         "MulticoreTSNE==0.1",
