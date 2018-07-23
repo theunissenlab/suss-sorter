@@ -145,7 +145,7 @@ class App(widgets.QMainWindow):
             return
 
         options = widgets.QFileDialog.Options()
-        options |= widgets.QFileDialog.DontUseNativeDialog
+        # options |= widgets.QFileDialog.DontUseNativeDialog
         default_name = self.current_file.replace("sorted", "curated")
         dir_name, base_name = os.path.split(default_name)
         default_save_path = os.path.join(dir_name, config.DEFAULT_SAVE_LOCATION, base_name)

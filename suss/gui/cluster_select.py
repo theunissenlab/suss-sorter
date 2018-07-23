@@ -129,6 +129,8 @@ class ClusterSelector(widgets.QScrollArea):
             return
         else:
             self.show_auditory_responses = state
+            for label in list(self._cached_cluster_info.keys()):
+                del self._cached_cluster_info[label]
             self.setup_data()
             self.init_ui()
 
