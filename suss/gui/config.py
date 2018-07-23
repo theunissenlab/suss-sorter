@@ -3,4 +3,9 @@ ISI_BINS = 30
 BASE_DIRECTORY = None
 DEFAULT_SAVE_LOCATION = "../manually_curated"
 
-USERS = []
+USERS = [
+    "Kevin",
+    "Bill",
+    "Frederic",
+    "Lily"
+]

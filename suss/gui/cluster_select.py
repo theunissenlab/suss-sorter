@@ -334,13 +334,16 @@ class ClusterInfo(widgets.QWidget):
         self.ax_psth = fig.add_axes([0.66, 0, 0.34, 1])
         self.ax_psth.patch.set_alpha(0.0)
         self.fr_label = self.ax_wf.text(0, self.ax_wf.get_ylim()[0], "",
-                horizontalalignment="left", verticalalignment="bottom")
+                horizontalalignment="left", verticalalignment="bottom", fontsize=6)
+        self.snr_label = None
         clear_axes(self.ax_isi, self.ax_psth)
 
     def set_ylim(self, ylim):
         self.ylim = ylim
         self.ax_wf.set_ylim(*self.ylim)
         self.fr_label.set_y(self.ylim[0])
+        if self.snr_label:
+            self.snr_label.set_y(self.ylim[0])
 
     def setup_data(self):
         cluster = self.cluster.flatten()
@@ -362,6 +365,11 @@ class ClusterInfo(widgets.QWidget):
         fr = len(cluster) / (np.max(cluster.times) - np.min(cluster.times))
 
         self.fr_label.set_text("{:.1f} Hz".format(fr))
+        snr = np.abs(mean)[len(mean) // 2] / std[len(mean) // 2]
+        if not self.snr_label:
+            self.snr_label = self.ax_wf.text(self.ax_wf.get_xlim()[1], self.ax_wf.get_ylim()[0], "",
+                    horizontalalignment="right", verticalalignment="bottom", fontsize=6)
+        self.snr_label.set_text("SNR: {:.1f}".format(snr))
         self.ax_wf.yaxis.set_major_locator(ticker.MultipleLocator(base=100))
         self.ax_wf.xaxis.set_major_locator(ticker.MultipleLocator(base=10))
         self.ax_wf.grid(True)
