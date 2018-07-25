@@ -534,7 +534,10 @@ def flip_points(data, labels, flippable, n_neighbors=10, create_labels=False):
 
 
 def tsne_time(dataset, perplexity=30, t_scale=2 * 60 * 60, pcs=12):
-    pcaed = PCA(n_components=pcs).fit_transform(dataset.waveforms)
+    if pcs >= min(dataset.waveforms.shape):
+        pcaed = PCA(n_components=min(dataset.waveforms.shape)).fit_transform(dataset.waveforms)
+    else:
+        pcaed = PCA(n_components=pcs).fit_transform(dataset.waveforms)
     wf_arr = scipy.stats.zscore(pcaed)
     t_arr = dataset.times / t_scale
     t_arr = t_arr - np.mean(t_arr)

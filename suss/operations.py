@@ -2,6 +2,7 @@
 """
 import numpy as np
 from sklearn.cluster import KMeans
+from sklearn.decomposition import PCA
 
 from suss.core import ClusterDataset, SubDataset
 from suss.sort import pca_time, cleanup_clusters, tsne_time, _vote_on_labels
@@ -124,9 +125,11 @@ def recluster_node(dataset, node=None, idx=None, label=None):
     # Get the node you want to recluster and flatten it
     selected_data = dataset.select(selector).flatten(1)
     if len(selected_data) >= 50:
-        cluster_on = tsne_time(selected_data, pcs=6, t_scale=3 * 60 * 60.0)
+        cluster_on = tsne_time(selected_data, pcs=6, t_scale=2 * 60 * 60.0)
+    elif len(selected_data) >= 10:
+        cluster_on = pca_time(selected_data, pcs=6, t_scale=2 * 60 * 60.0)
     else:
-        cluster_on = pca_time(selected_data, pcs=6, t_scale=3 * 60 * 60.0)
+        cluster_on = PCA(n_components=min(6, len(selected_data))).fit_transform(selected_data.waveforms)
 
     weight = np.array([node.count for node in selected_data.nodes])
 

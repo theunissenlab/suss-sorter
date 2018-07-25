@@ -312,7 +312,7 @@ class SussViewer(widgets.QFrame):
                 menu.addAction(_merge_action)
                 _merge_action.triggered.connect(self.merge)
 
-            if len(self.dataset.select(self.dataset.labels == label).flatten(1)) > 10:
+            if len(self.dataset.select(self.dataset.labels == label).flatten(1)) >= 5:
                 _recluster_action = widgets.QAction("Recluster Cluster {}".format(label), self)
                 menu.addAction(_recluster_action)
                 _recluster_action.triggered.connect(partial(self.recluster, label))

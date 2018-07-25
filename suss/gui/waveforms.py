@@ -8,6 +8,8 @@ class WaveformsPlot(widgets.QFrame):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.view_all = False
+        self.show_max = 30
 
         self.setup_plots()
         self.setup_data()
@@ -15,6 +17,11 @@ class WaveformsPlot(widgets.QFrame):
         self.parent().UPDATED_CLUSTERS.connect(self.reset)
         self.parent().CLUSTER_HIGHLIGHT.connect(self.on_cluster_highlight)
         self.parent().CLUSTER_SELECT.connect(self.on_cluster_select)
+
+    def toggle_view_all_waveforms(self, state):
+        if state != self.view_all:
+            self.view_all = state
+            self.reset(self.dataset, self.dataset)
 
     def reset(self, new_dataset, old_dataset):
         self.ax.clear()
@@ -46,39 +53,55 @@ class WaveformsPlot(widgets.QFrame):
         self.highlight_plot = None
 
     def setup_data(self):
-        if not len(self.dataset.nodes):
-            self.canvas.draw_idle()
-            return
-
-    def on_cluster_select(self, selected, old_selected):
         self.ax.clear()
         self.ax.patch.set_alpha(0.8)
         self.highlight_plot = None
 
-        for label in selected:
+        if not len(self.dataset.nodes):
+            self.canvas.draw_idle()
+            return
+
+        for label in self.selected:
             if label is None:
                 continue
             try:
                 node = self.dataset.nodes[self.dataset.labels == label][0]
             except:
                 continue
+
             mean = node.centroid
             std = np.std(node.flatten().waveforms, axis=0)
-
-            self.ax.fill_between(
-                np.arange(len(mean)),
-                mean - std,
-                mean + std,
-                color=self.colors[label],
-                alpha=0.2,
-                rasterized=True)
+            if self.view_all:
+                skip = max(1, node.count // self.show_max)
+                start_at = np.random.choice(np.arange(skip))
+                self.ax.plot(
+                    node.flatten().waveforms[start_at::skip].T,
+                    color=self.colors[label],
+                    rasterized=True,
+                    alpha=0.5,
+                    linewidth=0.5)
+            else:
+                self.ax.fill_between(
+                    np.arange(len(mean)),
+                    mean - std,
+                    mean + std,
+                    color=self.colors[label],
+                    alpha=0.2,
+                    rasterized=True)
             self.ax.plot(
                 np.arange(len(mean)),
                 mean,
                 color=self.colors[label],
-                linewidth=3,
+                linewidth=2,
                 rasterized=True)
+            self.ax.set_ylim(
+                min(self.ax.get_ylim()[0], mean[len(mean) // 2] - std[len(std) // 2]),
+                max(self.ax.get_ylim()[1], mean[len(mean) // 2] + std[len(std) // 2])
+            )
         self.canvas.draw_idle()
+
+    def on_cluster_select(self, selected, old_selected):
+        self.setup_data()
 
     def on_cluster_highlight(self, new_highlight, old_highlight, temporary):
         if new_highlight is None:
@@ -111,4 +134,9 @@ class WaveformsPlot(widgets.QFrame):
     def init_ui(self):
         layout = widgets.QVBoxLayout()
         layout.addWidget(self.canvas)
+
+        toggle_box = widgets.QCheckBox("View All Waveforms",self)
+        toggle_box.stateChanged.connect(self.toggle_view_all_waveforms)
+        layout.addWidget(toggle_box)
+
         self.setLayout(layout)

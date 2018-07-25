@@ -364,8 +364,8 @@ class ClusterInfo(widgets.QWidget):
 
         fr = len(cluster) / (np.max(cluster.times) - np.min(cluster.times))
 
-        self.fr_label.set_text("{:.1f} Hz".format(fr))
-        snr = np.abs(mean)[len(mean) // 2] / std[len(mean) // 2]
+        snr = (np.max(mean) - np.min(mean)) / np.mean(std)
+        # snr = np.abs(mean)[len(mean) // 2] / std[len(mean) // 2]
         if not self.snr_label:
             self.snr_label = self.ax_wf.text(self.ax_wf.get_xlim()[1], self.ax_wf.get_ylim()[0], "",
                     horizontalalignment="right", verticalalignment="bottom", fontsize=6)
@@ -378,6 +378,8 @@ class ClusterInfo(widgets.QWidget):
             self.set_ylim(self.ax_wf.get_ylim())
         else:
             self.set_ylim(self.ylim)
+
+        self.fr_label.set_text("{:.1f} uV\n{:.1f} Hz".format(mean[len(mean) // 2], fr))
 
         isi = np.diff(cluster.times)
         isi_violations = np.sum(isi < 0.001) / len(isi)
