@@ -10,18 +10,53 @@ from sklearn.decomposition import PCA
 class TimeseriesPlot(widgets.QFrame):
 
     ndim = 2
+    max_points = 20000
+    detail_level_scatter_size = {
+        2: 4,
+        1: 3,
+        None: 2
+    }
 
     def __init__(self, size=(700, 100), parent=None):
         super().__init__(parent)
         self.size = size
 
         self._rotation_period = 100
+
+        self.setup_detail_level_selector()
         self.setup_plots()
         self.setup_data()
         self.init_ui()
         self.parent().UPDATED_CLUSTERS.connect(self.reset)
         self.parent().CLUSTER_HIGHLIGHT.connect(self.on_cluster_highlight)
         self.parent().CLUSTER_SELECT.connect(self.on_cluster_select)
+
+    def setup_detail_level_selector(self):
+        self.detail_level_box = widgets.QComboBox(self)
+        self.detail_level_box.addItem("Normal Detail", 1)
+        self.detail_level_box.addItem("High Detail", 2)
+        self.detail_level_box.addItem("All Waveforms", None)
+        self.detail_level_box.activated.connect(self.update_detail_level)
+        self.detail_level_box.setMaximumWidth(100)
+
+        if self.dataset.count <= 30000:
+            # The entire dataset does not have many waveforms
+            self.set_detail_level(2)
+            self.detail_level_box.setCurrentIndex(2)
+        elif len(self.dataset.flatten(1)) <= 500:
+            # The fully clustered dataset is very small
+            self.set_detail_level(1)
+            self.detail_level_box.setCurrentIndex(1)
+        else:
+            self.set_detail_level(0)
+            self.detail_level_box.setCurrentIndex(0)
+
+    def update_detail_level(self, index):
+        self.set_detail_level(index)
+        self.reset()
+
+    def set_detail_level(self, index):
+        self.flatten_level = self.detail_level_box.itemData(index)
 
     def reset(self):
         # Delete the old layout
@@ -114,16 +149,19 @@ class TimeseriesPlot(widgets.QFrame):
         self.scatters = defaultdict(list)
         self.main_scatters = []
 
-        self.flattened = self.dataset.flatten(1)
+        self.flattened = self.dataset.flatten(self.flatten_level)
+        skip = max(1, len(self.flattened) // self.max_points)
+        self.flattened = self.flattened.select(slice(None, None, skip))
 
         self.pca = PCA(n_components=self.ndim + 1).fit(self.flattened.waveforms)
         self.pcs = self.pca.transform(self.flattened.waveforms)
 
+        s = self.detail_level_scatter_size[self.flatten_level]
         for dim in range(self.ndim):
             self.main_scatters.append(self.axes[dim].scatter(
                 self.flattened.times,
                 self.pcs.T[dim],
-                s=5,
+                s=s,
                 alpha=0.8,
                 color="Gray",
                 rasterized=True
@@ -131,12 +169,13 @@ class TimeseriesPlot(widgets.QFrame):
 
         for label, node in zip(self.dataset.labels, self.dataset.nodes):
             pcs = self.pcs[self.flattened.labels == label]
+            times = self.flattened.times[self.flattened.labels == label]
             for dim in range(self.ndim):
                 self.scatters[label].append(
                     self.axes[dim].scatter(
-                        node.times,
+                        times,
                         pcs.T[dim],
-                        s=10,
+                        s=3 * s,
                         alpha=1,
                         color=self.colors[label],
                         rasterized=True
@@ -178,5 +217,8 @@ class TimeseriesPlot(widgets.QFrame):
 
     def init_ui(self):
         layout = widgets.QVBoxLayout()
+
         layout.addWidget(self.canvas)
+        layout.addWidget(self.detail_level_box)
+
         self.setLayout(layout)

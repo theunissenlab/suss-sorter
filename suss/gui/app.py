@@ -22,7 +22,9 @@ from suss.operations import (
         delete_nodes,
         match_one,
         merge_nodes,
-        recluster_node
+        recluster_node,
+        recluster_node_in_time,
+        cleanup_cluster_assignments
 )
 
 
@@ -215,7 +217,7 @@ class SussViewer(widgets.QFrame):
     CLUSTER_SELECT = pyqtSignal(set, set)
     # Emits an integer label for the cluster that should be highlighted and previous
     CLUSTER_HIGHLIGHT = pyqtSignal(object, object, bool)
-    AUDITORY_RESPONSES = pyqtSignal(bool)
+    AUDITORY_RESPONSES = pyqtSignal(object, bool)
 
     def __init__(self, dataset=None, parent=None):
         super().__init__(parent)
@@ -264,8 +266,13 @@ class SussViewer(widgets.QFrame):
         self.clear_action = widgets.QAction("Clear Selection", self)
         self.delete_others_action = widgets.QAction("Filter", self)
         self.select_all_action = widgets.QAction("Select All", self)
-        self.show_auditory_action = widgets.QAction("Compute Sound Triggered PSTH", self, checkable=True)
-        self.show_auditory_action.setChecked(False)
+        self.show_live_auditory_responses_action = widgets.QAction(
+                "Live Sound Triggered PSTH", self, checkable=True)
+        self.show_playback_auditory_responses_action = widgets.QAction(
+                "Playback Triggered PSTH", self, checkable=True)
+        self.show_live_auditory_responses_action.setChecked(False)
+        self.show_playback_auditory_responses_action.setChecked(False)
+        self.cleanup_clusters_action = widgets.QAction("Cleanup Clusters (kneighbors classifier)", self)
 
         self.unhide_all_action.triggered.connect(self.unhide_all)
         self.undo_action.triggered.connect(self._undo)
@@ -275,10 +282,29 @@ class SussViewer(widgets.QFrame):
         self.delete_others_action.triggered.connect(self.delete_unselected)
         self.clear_action.triggered.connect(self.clear)
         self.select_all_action.triggered.connect(self.select_all)
-        self.show_auditory_action.triggered.connect(self.toggle_auditory)
+        self.show_live_auditory_responses_action.triggered.connect(partial(self.toggle_auditory, "live"))
+        self.show_playback_auditory_responses_action.triggered.connect(partial(self.toggle_auditory, "playback"))
+        self.cleanup_clusters_action.triggered.connect(self.cleanup_clusters)
 
-    def toggle_auditory(self, state):
-        self.AUDITORY_RESPONSES.emit(state)
+    def toggle_auditory(self, category, state):
+        if category == "live":
+            self.show_live_auditory_responses_action.setChecked(state)
+            self.show_playback_auditory_responses_action.setChecked(False)
+        elif category == "playback":
+            self.show_playback_auditory_responses_action.setChecked(state)
+            self.show_live_auditory_responses_action.setChecked(False)
+        self.AUDITORY_RESPONSES.emit(category, state)
+
+    def cleanup_clusters(self, state):
+        _new_dataset = cleanup_cluster_assignments(self.dataset, n_neighbors=3)
+        new_labels = set(_new_dataset.labels)
+        changed_labels = get_changed_labels(_new_dataset, self.dataset)
+
+        _old_selected = self.selected.copy()
+        self.selected = set.intersection(new_labels, changed_labels)
+        self.colors = make_color_map(_new_dataset.labels)
+        self._enstack("clean", _new_dataset)
+        self.CLUSTER_SELECT.emit(self.selected, _old_selected)
 
     @contextmanager
     def temporary_highlight(self, label):
@@ -312,10 +338,13 @@ class SussViewer(widgets.QFrame):
                 menu.addAction(_merge_action)
                 _merge_action.triggered.connect(self.merge)
 
-            if len(self.dataset.select(self.dataset.labels == label).flatten(1)) >= 5:
-                _recluster_action = widgets.QAction("Recluster Cluster {}".format(label), self)
-                menu.addAction(_recluster_action)
-                _recluster_action.triggered.connect(partial(self.recluster, label))
+            _recluster_action = widgets.QAction("Recluster Cluster {} by shape".format(label), self)
+            menu.addAction(_recluster_action)
+            _recluster_action.triggered.connect(partial(self.recluster, label, "waveform"))
+
+            _recluster_time_action = widgets.QAction("Recluster Cluster {} in time".format(label), self)
+            menu.addAction(_recluster_time_action)
+            _recluster_time_action.triggered.connect(partial(self.recluster, label, "time"))
 
             _hide_action = widgets.QAction("Hide Cluster {}".format(label), self)
             menu.addAction(_hide_action)
@@ -347,8 +376,11 @@ class SussViewer(widgets.QFrame):
 
             menu.exec_(pos)
 
-    def recluster(self, label):
-        _new_dataset = recluster_node(self.dataset, label=label)
+    def recluster(self, label, mode):
+        if mode == "waveform":
+            _new_dataset = recluster_node(self.dataset, label=label)
+        elif mode == "time":
+            _new_dataset = recluster_node_in_time(self.dataset, label=label)
         new_labels = set(_new_dataset.labels)
         changed_labels = get_changed_labels(_new_dataset, self.dataset)
 
@@ -579,7 +611,11 @@ class SussViewer(widgets.QFrame):
         self.edit_menu.addAction(self.delete_action)
         self.edit_menu.addAction(self.delete_others_action)
 
-        self.tools_menu.addAction(self.show_auditory_action)
+        psth_menu = self.tools_menu.addMenu("&Stimulus Triggered Responses")
+        psth_menu.addAction(self.show_live_auditory_responses_action)
+        psth_menu.addAction(self.show_playback_auditory_responses_action)
+
+        self.tools_menu.addAction(self.cleanup_clusters_action)
 
         self.on_dataset_changed()
         # self.cluster_selector = ClusterSelector(parent=self)

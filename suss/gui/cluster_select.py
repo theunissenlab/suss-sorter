@@ -76,12 +76,10 @@ class ClusterSelector(widgets.QScrollArea):
                 os.path.dirname(os.path.dirname(self.window().current_file)),
                 "vocal_periods.npy")
         if os.path.exists(vocal_period_file):
-            vocal_periods = np.load(vocal_period_file)[()]["live"]
-            self.stimuli = [
-                period["start_time"].item() for period in vocal_periods
-            ]
+            vocal_periods = np.load(vocal_period_file)[()]
+            self._stimuli = vocal_periods
         else:
-            self.stimuli = None
+            self._stimuli = None
 
         self.setup_data()
         self.init_ui()
@@ -90,6 +88,15 @@ class ClusterSelector(widgets.QScrollArea):
         self.parent().CLUSTER_SELECT.connect(self.update_checks)
         self.parent().CLUSTER_HIGHLIGHT.connect(self.on_cluster_highlight)
         self.parent().AUDITORY_RESPONSES.connect(self.on_auditory_responses)
+
+    def stimuli(self, key):
+        if not self.has_stimuli:
+            return []
+        return [period["start_time"].item() for period in self._stimuli[key]]
+
+    @property
+    def has_stimuli(self):
+        return self._stimuli is not None
 
     def reset(self, new_dataset, old_dataset):
         old_scroll = self.verticalScrollBar().value()
@@ -124,15 +131,21 @@ class ClusterSelector(widgets.QScrollArea):
             button.clicked.emit(label in selected)
             button.setChecked(label in selected)
 
-    def on_auditory_responses(self, state):
-        if state == self.show_auditory_responses:
+    def on_auditory_responses(self, category, state):
+        if not self.show_auditory_responses and not state:
             return
+        elif self.show_auditory_responses == category:
+            return
+
+        if not state:
+            self.show_auditory_responses = False
         else:
-            self.show_auditory_responses = state
-            for label in list(self._cached_cluster_info.keys()):
-                del self._cached_cluster_info[label]
-            self.setup_data()
-            self.init_ui()
+            self.show_auditory_responses = category
+
+        for label in list(self._cached_cluster_info.keys()):
+            del self._cached_cluster_info[label]
+        self.setup_data()
+        self.init_ui()
 
     def on_cluster_highlight(self, new_highlight, old_highlight, temporary):
         if old_highlight is not None and old_highlight in self.panels:
@@ -258,6 +271,7 @@ class ClusterSelector(widgets.QScrollArea):
             progress.setValue(_progress)
 
         progress.setValue(len(self.dataset.nodes) + 1)
+        progress.hide()
 
     def create_tags_menu(self, cluster):
         menu = widgets.QMenu("Tags")
@@ -406,12 +420,14 @@ class ClusterInfo(widgets.QWidget):
                 linewidth=0.2)
         self.ax_isi.set_xlim(0, t_max)
 
-        if self.parent().show_auditory_responses and self.parent().stimuli:
+        if self.parent().show_auditory_responses and self.parent().has_stimuli:
             stimuli_times = [
-                start_time for start_time in self.parent().stimuli
+                start_time for start_time in self.parent().stimuli(
+                    self.parent().show_auditory_responses
+                )
                 if cluster.times[0] <= start_time < cluster.times[-1]
             ]
-            psth, _ = align(cluster.flatten(), stimuli_times, 0, 1)
+            psth, _ = align(cluster.flatten(), stimuli_times, -1, 1)
             if len(psth):
                 hist, bin_edges = np.histogram(
                         np.concatenate(psth),

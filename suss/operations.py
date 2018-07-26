@@ -5,7 +5,7 @@ from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
 
 from suss.core import ClusterDataset, SubDataset
-from suss.sort import pca_time, cleanup_clusters, tsne_time, _vote_on_labels
+from suss.sort import pca_time, cleanup_clusters, tsne_time, _vote_on_labels, cleanup_clusters
 
 
 def force_single_kwarg(**kwargs):
@@ -119,29 +119,53 @@ def merge_nodes(dataset, nodes=None, idxs=None, labels=None):
     return add_nodes(new_dataset, _merge(*nodes_to_combine))
 
 
-def recluster_node(dataset, node=None, idx=None, label=None):
+def recluster_node(dataset, node=None, idx=None, label=None, n_clusters=4):
     selector = match_one(dataset, label=label, idx=idx, node=node)
 
     # Get the node you want to recluster and flatten it
     selected_data = dataset.select(selector).flatten(1)
-    if len(selected_data) >= 50:
+    if len(selected_data) >= 100:
         cluster_on = tsne_time(selected_data, pcs=6, t_scale=2 * 60 * 60.0)
-    elif len(selected_data) >= 10:
-        cluster_on = pca_time(selected_data, pcs=6, t_scale=2 * 60 * 60.0)
     else:
-        cluster_on = PCA(n_components=min(6, len(selected_data))).fit_transform(selected_data.waveforms)
+        cluster_on = PCA(
+            n_components=min(6, len(selected_data))
+        ).fit_transform(selected_data.waveforms)
+
+    n_clusters = min(n_clusters, len(cluster_on))
 
     weight = np.array([node.count for node in selected_data.nodes])
 
-    # Reassociate that data with new labels
-    # labels = _vote_on_labels(selected_data)
-    kmeans = KMeans(n_clusters=4).fit(cluster_on, sample_weight=weight)
+    kmeans = KMeans(n_clusters=n_clusters).fit(cluster_on, sample_weight=weight)
     labels = kmeans.predict(cluster_on, sample_weight=weight)
-    labels = cleanup_clusters(cluster_on, labels, n_neighbors=3)
     reclustered = selected_data.cluster(labels)
 
     new_dataset = dataset.select(np.logical_not(selector), child=False)
     return add_nodes(new_dataset, *reclustered.nodes)
+
+
+def recluster_node_in_time(dataset, node=None, idx=None, label=None, n_clusters=4):
+    selector = match_one(dataset, label=label, idx=idx, node=node)
+
+    # Get the node you want to recluster and flatten it
+    selected_data = dataset.select(selector).flatten(1)
+    cluster_on = selected_data.times[:, None]
+    weight = np.array([node.count for node in selected_data.nodes])
+
+    n_clusters = min(n_clusters, len(cluster_on))
+
+    kmeans = KMeans(n_clusters=n_clusters).fit(cluster_on, sample_weight=weight)
+    labels = kmeans.predict(cluster_on, sample_weight=weight)
+    reclustered = selected_data.cluster(labels)
+
+    new_dataset = dataset.select(np.logical_not(selector), child=False)
+    return add_nodes(new_dataset, *reclustered.nodes)
+
+
+def cleanup_cluster_assignments(dataset, n_neighbors=3):
+    flat = dataset.flatten(1)
+    projection = pca_time(flat, pcs=6, t_scale=1 * 60 * 60.0)
+    new_labels = cleanup_clusters(projection, flat.labels, n_neighbors=n_neighbors)
+    return flat.cluster(new_labels)
 
     
 

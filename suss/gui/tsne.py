@@ -71,6 +71,12 @@ class TSNEPlot(widgets.QFrame):
         self.scatters = defaultdict(list)
         self.mpl_events = []
 
+        if len(self.dataset.flatten(2)) <= 2000:
+            self.flatten_level = 2
+        else:
+            self.flatten_level = 1
+
+        self.base_flattened = self.dataset.flatten(self.flatten_level)
         self.setup_plots()
         self.run_tsne_background()
         self.init_ui()
@@ -96,7 +102,7 @@ class TSNEPlot(widgets.QFrame):
     def run_tsne_background(self):
         self.loading = True
         self.base_dataset = self.dataset
-        self.base_flattened = self.dataset.flatten(1)
+        self.base_flattened = self.dataset.flatten(self.flatten_level)
         self.worker = BackgroundTSNE(self.base_flattened)
         self.base_idx = self.base_flattened.ids
         self.base_labels = self.base_flattened.labels
@@ -172,7 +178,7 @@ class TSNEPlot(widgets.QFrame):
 
     def setup_data(self):
         self.scatters = defaultdict(list)
-        self.flattened = self.dataset.flatten(1)
+        self.flattened = self.dataset.flatten(self.flatten_level)
         self.current_idx = self.flattened.ids
         self.current_labels = self.flattened.labels
 
