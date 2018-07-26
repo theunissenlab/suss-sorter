@@ -181,7 +181,7 @@ class TimeseriesPlot(widgets.QFrame):
                         rasterized=True
                     )
                 )
-                self.scatters[label][-1].set_visible(False)
+                self.scatters[label][-1].set_visible(label in self.selected)
 
         for dim, ax in enumerate(self.axes):
             ylim = np.max(np.abs(self.pcs[:, dim])) * 1.2
