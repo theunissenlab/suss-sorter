@@ -123,6 +123,18 @@ class BaseDataset(object):
             return np.sum([node.count for node in self.nodes])
 
     @property
+    def labeled_nodes(self):
+        """Convenient iterator of label, node tuples"""
+        return list(zip(self.labels, self.nodes))
+
+    @property
+    def weights(self):
+        if self.has_children:
+            return np.array([node.count for node in self.nodes])
+        else:
+            return np.ones(len(self))
+
+    @property
     def times(self):
         return self._data["times"]
 

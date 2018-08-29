@@ -1,6 +1,7 @@
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
+import umap
 from matplotlib import animation
 from sklearn.decomposition import PCA
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
@@ -319,30 +320,42 @@ def rotating_visualization(
             save_gif_filename=None,
             frames=100,
             interval=60.0,
-            save_gif_dpi=80
+            save_gif_dpi=80,
+            projection="pca"
         ):
     fig = fig if fig is not None else plt.figure(figsize=figsize)
     ax = fig.add_axes([0, 0.1, 1, 0.9])
 
-    pca = PCA(n_components=pcs)
-    data2d = pca.fit_transform(dataset.waveforms)
+    if projection == "pca":
+        pca = PCA(n_components=pcs)
+        data2d = pca.fit_transform(dataset.waveforms)
+    elif projection == "umap":
+        data2d = umap.UMAP(n_components=pcs).fit_transform(dataset.waveforms)
 
     if labels is None:
+        if dataset.has_children:
+            s = [node.count / 10 for node in dataset.nodes]
+        else:
+            s = 1
         scat = ax.scatter(
                 dataset.times,
                 data2d.T[0],
                 alpha=0.6,
                 color="Black",
-                s=[node.count / 10 for node in dataset.nodes]
+                s=s
         )
     else:
         scatters = {}
+        if dataset.has_children:
+            s = [node.count / 5 for node in dataset.nodes]
+        else:
+            s = 1
         for label in np.unique(labels):
             scatters[label] = ax.scatter(
                 dataset.times[labels == label],
                 data2d[labels == label].T[0],
                 alpha=0.6,
-                s=[node.count / 5 for node in dataset.nodes]
+                s=s
             )
 
     if ymax is None:

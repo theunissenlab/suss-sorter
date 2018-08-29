@@ -15,6 +15,10 @@ try:
 except ImportError:
     from sklearn.manifold import TSNE
 
+import scipy.stats
+from sklearn.decomposition import PCA
+import umap
+
 from suss.sort import tsne_time
 from suss.gui.utils import require_dataset
 
@@ -37,10 +41,16 @@ class BackgroundTSNE(QObject):
 
     @pyqtSlot()
     def computeTSNE(self):
-        tsne = tsne_time(self.dataset, t_scale=1 * 60.0 * 60.0)
+        # tsne = tsne_time(self.dataset, t_scale=6 * 60.0 * 60.0, n_components=2)
+        tsne = umap.UMAP(n_components=2).fit_transform(
+            np.hstack([
+                self.dataset.times[:, None] / (60.0 * 60.0),
+                PCA(n_components=6).fit_transform(scipy.stats.zscore(self.dataset.waveforms, axis=0))
+            ])
+        )
         # tsne = TSNE(n_components=2).fit_transform(self.dataset)
         print("Computed TSNE")
-        self.finished.emit(tsne)
+        self.finished.emit(tsne[:, :2])
 
 
 class TSNEPlot(widgets.QFrame):
@@ -189,7 +199,7 @@ class TSNEPlot(widgets.QFrame):
         tsne = self.tsne()
 
         self.main_scatter = self.ax.scatter(
-            *tsne.T,
+            *tsne.T[:2],
             s=5,
             alpha=0.4,
             facecolors=[self.colors[label] for label in self.current_labels],
@@ -203,7 +213,7 @@ class TSNEPlot(widgets.QFrame):
             # ids = node.flatten(1).ids
             ids = node.ids
             self.scatters[label].append(self.ax.scatter(
-                *tsne[np.isin(self.current_idx, ids)].T,
+                *tsne[np.isin(self.current_idx, ids)].T[:2],
                 facecolor=self.colors[label],
                 edgecolor="White",
                 s=14,
@@ -211,7 +221,7 @@ class TSNEPlot(widgets.QFrame):
                 rasterized=True))
             self.scatters[label][-1].set_visible(False)
             self.scatters[label].append(self.ax.scatter(
-                *tsne[np.isin(self.current_idx, ids)].T,
+                *tsne[np.isin(self.current_idx, ids)].T[:2],
                 facecolor="White",
                 edgecolor=self.colors[label],
                 s=20,
@@ -232,7 +242,7 @@ class TSNEPlot(widgets.QFrame):
         for label in self.scatters:
             scat = self.scatters[label][0]
             scat.set_visible(label in selected)
-
+        self.ax.autoscale()
         self.canvas.draw_idle()
 
     @require_dataset

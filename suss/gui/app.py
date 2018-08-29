@@ -19,6 +19,7 @@ from suss.gui.waveforms import WaveformsPlot
 from suss.gui.utils import make_color_map, get_changed_labels
 from suss.operations import (
         add_nodes,
+        cleanup_node,
         delete_nodes,
         match_one,
         merge_nodes,
@@ -342,6 +343,10 @@ class SussViewer(widgets.QFrame):
             menu.addAction(_recluster_action)
             _recluster_action.triggered.connect(partial(self.recluster, label, "waveform"))
 
+            _cleanup_action = widgets.QAction("Detect noise in Cluster {}".format(label), self)
+            menu.addAction(_cleanup_action)
+            _cleanup_action.triggered.connect(partial(self.cleanup, label))
+
             _recluster_time_action = widgets.QAction("Recluster Cluster {} in time".format(label), self)
             menu.addAction(_recluster_time_action)
             _recluster_time_action.triggered.connect(partial(self.recluster, label, "time"))
@@ -388,6 +393,17 @@ class SussViewer(widgets.QFrame):
         self.selected = set.intersection(new_labels, changed_labels)
         self.colors = make_color_map(_new_dataset.labels)
         self._enstack("recluster", _new_dataset)
+        self.CLUSTER_SELECT.emit(self.selected, _old_selected)
+
+    def cleanup(self, label):
+        _new_dataset = cleanup_node(self.dataset, label=label)
+        new_labels = set(_new_dataset.labels)
+        changed_labels = get_changed_labels(_new_dataset, self.dataset)
+
+        _old_selected = self.selected.copy()
+        self.selected = set.intersection(new_labels, changed_labels)
+        self.colors = make_color_map(_new_dataset.labels)
+        self._enstack("cleanup", _new_dataset)
         self.CLUSTER_SELECT.emit(self.selected, _old_selected)
 
     @property

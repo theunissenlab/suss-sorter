@@ -1,11 +1,52 @@
 """Operations for modifying the clusters in a dataset
 """
+import networkx as nx
 import numpy as np
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
+from sklearn.neighbors import KNeighborsClassifier, NearestNeighbors, kneighbors_graph
+from sklearn.neighbors import LocalOutlierFactor
+
+import scipy
+from scipy.sparse.csgraph import minimum_spanning_tree
+import umap
 
 from suss.core import ClusterDataset, SubDataset
 from suss.sort import pca_time, cleanup_clusters, tsne_time, _vote_on_labels, cleanup_clusters
+
+
+def get_mknn(X, n_neighbors=10):
+    _dist = scipy.spatial.distance_matrix(X, X)
+    spanning = minimum_spanning_tree(_dist).toarray()
+    n_neighbors = int(np.min([n_neighbors, X.shape[0] // 2, X.shape[1] // 2]))
+    knn = kneighbors_graph(X, n_neighbors=n_neighbors, mode="distance").toarray()
+    # zero out edges that aren't both neighbors
+    knn = knn * (knn.T > 0)
+    knn[knn == 0] = spanning[knn == 0]
+    return nx.from_numpy_array(knn)
+
+
+def remove_outliers(mknn, n_neighbors=10, edges=1):    
+    degs = [n for n, d in mknn.degree() if d < edges + 1]
+    while len(degs):
+        mknn.remove_nodes_from(degs)
+        degs = [n for n, d in mknn.degree() if d < edges + 1]
+
+    return mknn
+
+
+def label_outliers(X, p=0.1, n_neighbors=10):
+    clf = LocalOutlierFactor(n_neighbors=20, contamination=p)
+    pred = clf.fit_predict(X)
+    return pred
+
+
+    mknn = get_mknn(X)
+    mknn = remove_outliers(mknn, n_neighbors=n_neighbors, edges=1)
+    labels = np.ones(len(X))
+    if len(mknn):
+        labels[np.array(mknn)] = 0
+    return mknn, labels
 
 
 def force_single_kwarg(**kwargs):
@@ -143,11 +184,34 @@ def recluster_node(dataset, node=None, idx=None, label=None, n_clusters=4):
     return add_nodes(new_dataset, *reclustered.nodes)
 
 
-def recluster_node_in_time(dataset, node=None, idx=None, label=None, n_clusters=4):
+def cleanup_node(dataset, node=None, idx=None, label=None, n_clusters=3):
     selector = match_one(dataset, label=label, idx=idx, node=node)
 
     # Get the node you want to recluster and flatten it
     selected_data = dataset.select(selector).flatten(1)
+    # proj = umap.UMAP(n_components=6).fit_transform(selected_data.waveforms)
+    proj = PCA(n_components=min(n_clusters, len(selected_data))).fit_transform(selected_data.waveforms)
+    outliers = label_outliers(proj, p=0.01)
+
+    new_dataset = dataset.select(np.logical_not(selector), child=False)
+    return add_nodes(
+            new_dataset,
+            *selected_data.cluster(outliers).nodes
+    )
+
+
+def recluster_node_in_time(dataset, node=None, idx=None, label=None, n_clusters=3):
+    selector = match_one(dataset, label=label, idx=idx, node=node)
+
+    # Get the node you want to recluster and flatten it
+    all_selected_data = dataset.select(selector).flatten(1)
+    # proj = PCA(n_components=6).fit_transform(all_selected_data.waveforms)
+    outliers = label_outliers(all_selected_data.times[:, None], p=0.01)
+
+    selected_data = all_selected_data.select(outliers == 1)
+    outlier_data = all_selected_data.select(outliers == -1)
+
+    # selected_data = dataset.select(selector).flatten(1)
     cluster_on = selected_data.times[:, None]
     weight = np.array([node.count for node in selected_data.nodes])
 
@@ -158,7 +222,7 @@ def recluster_node_in_time(dataset, node=None, idx=None, label=None, n_clusters=
     reclustered = selected_data.cluster(labels)
 
     new_dataset = dataset.select(np.logical_not(selector), child=False)
-    return add_nodes(new_dataset, *reclustered.nodes)
+    return add_nodes(new_dataset, outlier_data, *reclustered.nodes)
 
 
 def cleanup_cluster_assignments(dataset, n_neighbors=3):
