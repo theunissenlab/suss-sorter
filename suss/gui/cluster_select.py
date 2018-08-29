@@ -134,7 +134,7 @@ class ClusterSelector(widgets.QScrollArea):
     def on_auditory_responses(self, category, state):
         if not self.show_auditory_responses and not state:
             return
-        elif self.show_auditory_responses == category:
+        elif self.show_auditory_responses == category and state:
             return
 
         if not state:
