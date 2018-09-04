@@ -176,6 +176,10 @@ class ClusterSelector(widgets.QScrollArea):
         if not len(self.dataset):
             return
 
+        print(self.dataset)
+        print(self.dataset.waveforms)
+        print(self.dataset.waveforms.shape)
+
         wf_ylims = (np.min(self.dataset.waveforms), np.max(self.dataset.waveforms))
 
         progress = widgets.QProgressDialog(
