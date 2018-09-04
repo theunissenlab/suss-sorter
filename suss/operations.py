@@ -209,7 +209,7 @@ def cleanup_node(dataset, node=None, idx=None, label=None, n_clusters=3):
         proj = PCA(n_components=3).fit_transform(selected_data.waveforms)
         outliers = label_outliers(proj, p=0.01)
     else:
-        outliers = np.arange(selected_data.waveforms)
+        outliers = np.arange(len(selected_data.waveforms))
 
     new_dataset = dataset.select(np.logical_not(selector), child=False)
     return add_nodes(
