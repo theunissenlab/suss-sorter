@@ -235,12 +235,16 @@ def recluster_node_in_time(dataset, node=None, idx=None, label=None, n_clusters=
 
     n_clusters = min(n_clusters, len(cluster_on))
 
-    kmeans = KMeans(n_clusters=n_clusters).fit(cluster_on, sample_weight=weight)
-    labels = kmeans.predict(cluster_on, sample_weight=weight)
-    reclustered = selected_data.cluster(labels)
-
     new_dataset = dataset.select(np.logical_not(selector), child=False)
-    if len(outlier_data):
+
+    if len(cluster_on):
+        kmeans = KMeans(n_clusters=n_clusters).fit(cluster_on, sample_weight=weight)
+        labels = kmeans.predict(cluster_on, sample_weight=weight)
+        reclustered = selected_data.cluster(labels)
+    else:
+        reclustered = selected_data.cluster(np.array([]))
+
+    if len(outlier_data) and len(reclustered):
         return add_nodes(new_dataset, outlier_data, *reclustered.nodes)
     else:
         return add_nodes(new_dataset, *reclustered.nodes)
