@@ -191,8 +191,11 @@ def recluster_node(dataset, node=None, idx=None, label=None, n_clusters=4):
 
     # kmeans = KMeans(n_clusters=n_clusters).fit(cluster_on, sample_weight=weight)
     # labels = kmeans.predict(cluster_on, sample_weight=weight)
-    gmm = BayesianGaussianMixture(n_components=n_clusters).fit(cluster_on)
-    labels = gmm.predict(cluster_on)
+    if len(cluster_on) < 2:
+        labels = np.arange(len(cluster_on))
+    else:
+        gmm = BayesianGaussianMixture(n_components=n_clusters).fit(cluster_on)
+        labels = gmm.predict(cluster_on)
     reclustered = selected_data.cluster(labels)
 
     new_dataset = dataset.select(np.logical_not(selector), child=False)
