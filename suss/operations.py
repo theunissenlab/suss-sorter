@@ -39,7 +39,7 @@ def remove_outliers(mknn, n_neighbors=10, edges=1):
 def label_outliers(X, p=0.1, n_neighbors=10):
     """GMM Version"""
     if len(X) <= 4:
-        return np.arange(len(X))
+        return np.ones(len(X))
 
     pcs = PCA(n_components=2 if X.shape[1] >= 2 else 1).fit_transform(X)
     scores = np.max(np.abs(scipy.stats.zscore(pcs, axis=0)), axis=1)

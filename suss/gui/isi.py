@@ -105,6 +105,8 @@ class ISIPlot(widgets.QFrame):
             self.canvas.draw_idle()
             return
 
+        fr = len(clusters) / (np.max(clusters.times) - np.min(clusters.times))
+
         self.ax.hist(
             [
                 isi[across_clusters],
@@ -130,15 +132,17 @@ class ISIPlot(widgets.QFrame):
                     len(isi[across_clusters])
             )
             self.isi_label.set_text(
-                "{:.1f}% ISI violations\n{:.1f}% across clusters".format(
+                    "{:.1f}% ISI violations\np = {:.1f}%\n{:.1f}% across clusters".format(
                     100.0 * isi_violations,
-                    100.0 * isi_violations_across
+                    100 * (1 - np.exp(-fr * 0.001)),
+                    100.0 * isi_violations_across,
                 )
             )
         else:
             self.isi_label.set_text(
-                "{:.1f}%\nISI violations".format(
-                    100.0 * isi_violations
+                "{:.1f}% ISI violations\np = {:.1f}%".format(
+                    100.0 * isi_violations,
+                    100 * (1 - np.exp(-fr * 0.001)),
                 )
             )
 
