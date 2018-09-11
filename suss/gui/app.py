@@ -147,6 +147,14 @@ class App(widgets.QMainWindow):
         if not self.suss_viewer:
             return
 
+        if len(self.hidden):
+            widgets.QMessageBox.information(
+                    self,
+                    "Save",
+                    "Unhiding all hidden clusters before saving"
+            )
+            self.unhide_all()
+
         options = widgets.QFileDialog.Options()
         # options |= widgets.QFileDialog.DontUseNativeDialog
         default_name = self.current_file.replace("sorted", "curated")
