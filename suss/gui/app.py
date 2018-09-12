@@ -147,7 +147,7 @@ class App(widgets.QMainWindow):
         if not self.suss_viewer:
             return
 
-        if len(self.hidden):
+        if len(self.suss_viewer.hidden):
             widgets.QMessageBox.information(
                     self,
                     "Save",
