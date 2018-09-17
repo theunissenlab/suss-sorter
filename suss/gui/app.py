@@ -153,7 +153,7 @@ class App(widgets.QMainWindow):
                     "Save",
                     "Unhiding all hidden clusters before saving"
             )
-            self.unhide_all()
+            self.suss_viewer.unhide_all()
 
         options = widgets.QFileDialog.Options()
         # options |= widgets.QFileDialog.DontUseNativeDialog
