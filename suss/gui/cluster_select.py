@@ -76,7 +76,7 @@ class ClusterSelector(widgets.QScrollArea):
                 os.path.dirname(os.path.dirname(self.window().current_file)),
                 "vocal_periods.npy")
         if os.path.exists(vocal_period_file):
-            vocal_periods = np.load(vocal_period_file)[()]
+            vocal_periods = np.load(vocal_period_file, allow_pickle=True)[()]
             self._stimuli = vocal_periods
         else:
             self._stimuli = None

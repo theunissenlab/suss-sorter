@@ -4,7 +4,7 @@ import scipy
 
 
 def read_numpy(filename):
-    return np.load(filename)[()]
+    return np.load(filename, allow_pickle=True)[()]
 
 
 def save_numpy(filename, data):
