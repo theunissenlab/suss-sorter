@@ -19,6 +19,7 @@ import scipy.stats
 from sklearn.decomposition import PCA
 import umap
 
+from suss.gui.config import SHOW
 from suss.sort import tsne_time
 from suss.gui.utils import require_dataset
 
@@ -42,12 +43,20 @@ class BackgroundTSNE(QObject):
     @pyqtSlot()
     def computeTSNE(self):
         # tsne = tsne_time(self.dataset, t_scale=6 * 60.0 * 60.0, n_components=2)
-        tsne = umap.UMAP(n_components=2).fit_transform(
-            np.hstack([
-                self.dataset.times[:, None] / (60.0 * 60.0),
-                PCA(n_components=6).fit_transform(scipy.stats.zscore(self.dataset.waveforms, axis=0))
+        if SHOW == "pca":
+            tsne = TSNE(n_components=2).fit_transform(self.dataset.waveforms)
+            tsne = np.hstack([
+                scipy.stats.zscore(self.dataset.times[:, None]),
+                PCA(n_components=1, whiten=True).fit_transform(self.dataset.waveforms)
             ])
-        )
+        else:
+            tsne = umap.UMAP(n_components=2).fit_transform(
+                np.hstack([
+                    self.dataset.times[:, None] / (60.0 * 60.0),
+                    PCA(n_components=6).fit_transform(scipy.stats.zscore(self.dataset.waveforms, axis=0))
+                ])
+            )
+
         # tsne = TSNE(n_components=2).fit_transform(self.dataset)
         print("Computed TSNE")
         self.finished.emit(tsne[:, :2])
@@ -182,7 +191,7 @@ class TSNEPlot(widgets.QFrame):
         self.canvas.setStyleSheet("background-color:transparent;")
 
         self.ax = fig.add_axes(
-                [0, 0, 1, 1],
+                [0.1, 0.1, 0.9, 0.9],
                 facecolor="#101010")
         self.ax.patch.set_alpha(0.8)
 

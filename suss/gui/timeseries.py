@@ -9,8 +9,8 @@ from sklearn.decomposition import PCA
 
 class TimeseriesPlot(widgets.QFrame):
 
-    ndim = 2
-    max_points = 20000
+    ndim = 1
+    max_points = 10000
     detail_level_scatter_size = {
         2: 4,
         1: 3,
@@ -153,7 +153,7 @@ class TimeseriesPlot(widgets.QFrame):
         skip = max(1, len(self.flattened) // self.max_points)
         self.flattened = self.flattened.select(slice(None, None, skip))
 
-        self.pca = PCA(n_components=self.ndim + 1).fit(self.flattened.waveforms)
+        self.pca = PCA(n_components=self.ndim + 1, whiten=True).fit(self.flattened.waveforms)
         self.pcs = self.pca.transform(self.flattened.waveforms)
 
         s = self.detail_level_scatter_size[self.flatten_level]
