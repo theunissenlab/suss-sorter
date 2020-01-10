@@ -138,6 +138,8 @@ class TSNEPlot(widgets.QFrame):
         self.setup_data()
 
     def tsne(self):
+        print("_tsne shape: {}".format(self._tsne.shape))
+        print("_tsne selected shape: {}".format(self._tsne[np.isin(self.base_idx, self.current_idx)].shape))
         return self._tsne[np.isin(self.base_idx, self.current_idx)]
 
     def on_close(self):
@@ -215,6 +217,8 @@ class TSNEPlot(widgets.QFrame):
             edgecolor="White",
             rasterized=True
         )
+
+        print("current idx shape: {}".format(self.current_idx.shape))
 
         # for label, node in zip(self.dataset.labels, self.dataset.nodes):
         for label in self.dataset.labels:
