@@ -182,15 +182,31 @@ class App(widgets.QMainWindow):
         self.display_suss_viewer(dataset)
 
     def save_dataset(self, filename):
-        suss.io.save_pickle(filename, self.suss_viewer.dataset)
-        widgets.QMessageBox.information(
-                self,
-                "Save",
-                "Successfully saved {} to {}".format(
-                    self.suss_viewer.dataset,
-                    filename
-                )
-        )
+        try:
+            suss.io.save_pickle(filename, self.suss_viewer.dataset)
+        except Exception as e:
+            suss.io.save_pickle(
+                "{}.recovery".format(filename),
+                self.suss_viewer.dataset
+            )
+            widgets.QMessageBox.information(
+                    self,
+                    "Save Failed",
+                    "Failed to save {} to {}\n{}".format(
+                        self.suss_viewer.dataset,
+                        filename,
+                        e
+                    )
+            )
+        else:
+            widgets.QMessageBox.information(
+                    self,
+                    "Save",
+                    "Successfully saved {} to {}".format(
+                        self.suss_viewer.dataset,
+                        filename
+                    )
+            )
 
 
 class Splash(widgets.QWidget):
@@ -508,6 +524,9 @@ class SussViewer(widgets.QFrame):
             return
 
         last_action, _old_dataset = self.redo_stack.pop()
+        if "unhide" in last_action:
+            self.hidden = []
+
         self._enstack(last_action, _old_dataset, clear_redo=False)
 
     def _undo(self):
@@ -523,6 +542,16 @@ class SussViewer(widgets.QFrame):
             changed_labels = get_changed_labels(self.dataset, _old_dataset)
 
             _old_selected = self.selected.copy()
+
+            if "unhide" in last_action:
+                for label in changed_labels:
+                    selector = match_one(_old_dataset, label=label)
+                    node = _old_dataset.nodes[selector][0]
+                    self.hidden.append(node)
+
+            if "hide node" in last_action:
+                self.hidden.pop()
+
             if "delete unselected" in last_action:
                 self.selected = set(_old_dataset.labels)
             else:

@@ -1,6 +1,7 @@
 import pickle
 import numpy as np
 import scipy
+import os
 
 
 def read_numpy(filename):
@@ -8,7 +9,8 @@ def read_numpy(filename):
 
 
 def save_numpy(filename, data):
-    return np.save(filename, data)
+    np.save(filename, data)
+    os.chmod(filename, 0o777)
 
 
 def read_pickle(filename):
@@ -19,6 +21,7 @@ def read_pickle(filename):
 def save_pickle(filename, data):
     with open(filename, "wb") as open_file:
         pickle.dump(data, open_file)
+    os.chmod(filename, 0o777)
 
 
 def read_mat(filename):
