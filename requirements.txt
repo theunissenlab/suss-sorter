@@ -7,8 +7,9 @@ PyQt5==5.10.1
 scipy==1.1.0
 networkx==2.1
 quantities==0.12.0
-sklearn==0.21.0
+scikit-learn==0.21.1
 Cython==0.28.2
+umap-learn==0.3.2
 
 # MulticoreTSNE
 -e git://github.com/DmitryUlyanov/Multicore-TSNE.git@d4ff4a#egg=multicoretsne-0.1

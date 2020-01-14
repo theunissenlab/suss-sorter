@@ -9,6 +9,7 @@ DEFAULT_SAVE_LOCATION = "../manually_curated"
 USERS = [
     "Kevin",
     "Bill",
+    "Leah",
     "Frederic",
     "Lily",
     "Annie"
