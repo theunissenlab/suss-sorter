@@ -22,7 +22,7 @@ setup(
         # "hdbscan==0.8.13",
         "matplotlib>=2.2.2",
         "scipy>=0.19.0",
-        "scikit-learn==0.20dev0",
+        "scikit-learn>=0.20",
         "MulticoreTSNE==0.1",
         "networkx==2.1",
     ],
