@@ -75,9 +75,21 @@ class ClusterSelector(widgets.QScrollArea):
         vocal_period_file = os.path.join(
                 os.path.dirname(os.path.dirname(self.window().current_file)),
                 "vocal_periods.npy")
+        playback_periods_csv = os.path.join(
+                os.path.dirname(os.path.dirname(self.window().current_file)),
+                "playback_segments.csv")
         if os.path.exists(vocal_period_file):
             vocal_periods = np.load(vocal_period_file, allow_pickle=True)[()]
-            self._stimuli = vocal_periods
+            self._stimuli = {
+                "playback": [period["start_time"].item() for period in vocal_periods["playback"]],
+                "live": [period["start_time"].item() for period in vocal_periods["live"]]
+            }
+        elif os.path.exists(playback_periods_csv):
+            vocal_periods = pd.read_csv(playback_periods_csv)
+            self._stimuli = {
+                "playback": list(vocal_periods["start_time"])
+                "live": []
+            }
         else:
             self._stimuli = None
 
@@ -198,7 +210,7 @@ class ClusterSelector(widgets.QScrollArea):
                 "<b>{}</b> (n={}) {} clusters".format(
                     cluster_label,
                     cluster.count,
-                    len(cluster.nodes)
+                    "No cluster data" if not "nodes" in cluster._data else len(cluster.nodes)
                 )
             )
             header_label.setFixedHeight(14)

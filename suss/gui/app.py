@@ -53,10 +53,6 @@ class App(widgets.QMainWindow):
         self.close_action.setShortcut(gui.QKeySequence.Close)
         self.addAction(self.close_action)
 
-        self.addAction(self.load_action)
-        self.addAction(self.save_action)
-        self.addAction(self.close_action)
-
     def closeEvent(self, event):
         skip_confirmation = (
                 # Workaround for PyQt closeEvent being called twice bug
