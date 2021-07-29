@@ -10,10 +10,7 @@ from PyQt5 import QtGui as gui
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 from scipy.spatial import distance
-try:
-    from MulticoreTSNE import MulticoreTSNE as TSNE
-except ImportError:
-    from sklearn.manifold import TSNE
+from sklearn.manifold import TSNE
 
 import scipy.stats
 from sklearn.decomposition import PCA
@@ -44,10 +41,9 @@ class BackgroundTSNE(QObject):
     def computeTSNE(self):
         # tsne = tsne_time(self.dataset, t_scale=6 * 60.0 * 60.0, n_components=2)
         if SHOW == "pca":
-            tsne = TSNE(n_components=2).fit_transform(self.dataset.waveforms)
             tsne = np.hstack([
                 scipy.stats.zscore(self.dataset.times[:, None]),
-                PCA(n_components=1, whiten=True).fit_transform(self.dataset.waveforms)
+                PCA(n_components=2, whiten=True).fit_transform(self.dataset.waveforms)
             ])
         else:
             tsne = umap.UMAP(n_components=2).fit_transform(

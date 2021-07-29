@@ -12,10 +12,7 @@ from sklearn.decomposition import PCA
 from sklearn.neighbors import KNeighborsClassifier, NearestNeighbors, kneighbors_graph
 from sklearn.mixture import BayesianGaussianMixture
 
-try:
-    from MulticoreTSNE import MulticoreTSNE as TSNE
-except ImportError:
-    from sklearn.manifold import TSNE
+from sklearn.manifold import TSNE
 
 from .core import SpikeDataset
 

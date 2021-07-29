@@ -4,7 +4,7 @@ from contextlib import contextmanager
 from functools import partial
 
 from PyQt5 import QtWidgets as widgets
-from PyQt5.QtCore import QTimer, pyqtSignal
+from PyQt5.QtCore import Qt, QTimer, pyqtSignal
 from PyQt5 import QtGui as gui
 
 import suss.io
@@ -51,10 +51,6 @@ class App(widgets.QMainWindow):
         self.addAction(self.load_action)
 
         self.close_action.setShortcut(gui.QKeySequence.Close)
-        self.addAction(self.close_action)
-
-        self.addAction(self.load_action)
-        self.addAction(self.save_action)
         self.addAction(self.close_action)
 
     def closeEvent(self, event):
@@ -698,8 +694,14 @@ class SussViewer(widgets.QFrame):
 
 
 if __name__ == "__main__":
+    if hasattr(Qt, "AA_EnableHighDpiScaling"):
+        widgets.QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
+    if hasattr(Qt, "AA_UseHighDpiPixmaps"):
+        widgets.QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
+
     app = widgets.QApplication(sys.argv)
     window = App()
+
     try:
         result = app.exec_()
     except:
