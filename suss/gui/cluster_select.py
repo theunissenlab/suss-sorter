@@ -105,7 +105,7 @@ class ClusterSelector(widgets.QScrollArea):
     def stimuli(self, key):
         if not self.has_stimuli:
             return []
-        return [period["start_time"].item() for period in self._stimuli[key]]
+        return [period["start_time"] for period in self._stimuli[key]]
 
     @property
     def has_stimuli(self):
