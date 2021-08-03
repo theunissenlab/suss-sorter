@@ -3,6 +3,7 @@ import sys
 from functools import partial
 
 import numpy as np
+import pandas as pd
 from PyQt5 import QtWidgets as widgets
 from PyQt5.QtCore import Qt, QObjectCleanupHandler, pyqtSignal
 from PyQt5 import QtGui as gui
@@ -87,7 +88,7 @@ class ClusterSelector(widgets.QScrollArea):
         elif os.path.exists(playback_periods_csv):
             vocal_periods = pd.read_csv(playback_periods_csv)
             self._stimuli = {
-                "playback": list(vocal_periods["start_time"])
+                "playback": list(vocal_periods["start_time"]),
                 "live": []
             }
         else:
