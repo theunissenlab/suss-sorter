@@ -3,6 +3,7 @@ import sys
 from functools import partial
 
 import numpy as np
+import pandas as pd
 from PyQt5 import QtWidgets as widgets
 from PyQt5.QtCore import Qt, QObjectCleanupHandler, pyqtSignal
 from PyQt5 import QtGui as gui
