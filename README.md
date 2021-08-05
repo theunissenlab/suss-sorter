@@ -56,20 +56,12 @@ This project requires Python3.5+ (I recommend using a virtualenv.)
 
 (with pip)
 ```
-git clone https://github.com/theunissenlab/solid-garbanzo.git
-pip install solid-garbonzo
+pip install -e git+https://github.com/theunissenlab/suss-sorter.git@0.2
 
 # uninstall
 pip uninstall suss
 ```
 
-(standard)
-```
-git clone https://github.com/theunissenlab/solid-garbanzo.git
-cd solid-garbonzo
-python setup.py build
-python setup.py install
-```
 *This should install the package as well as its depenencies*
 
 #### Creating a isolated python virtual environment
@@ -77,9 +69,9 @@ python setup.py install
 Separately, install python [virtualenv](https://virtualenv.pypa.io/en/stable/installation/) and make sure you have python3 installed.
 
 ```
-git clone https://github.com/theunissenlab/solid-garbanzo.git
-cd solid-garbanzo
-virtualenv env --python python3
+git clone https://github.com/theunissenlab/suss-sorter.git
+cd suss-sorter
+python -m venv env
 source bin/activate
 pip install -r requirements.txt
 ```
@@ -89,10 +81,6 @@ pip install -r requirements.txt
 * `ffmpeg` for creating HTML5 animated plots in notebooks
 
 * `imagemagick` for generating animated plots in gif format
-
-## Documentation
-
-Uhhh. TBD.
 
 ## References
 

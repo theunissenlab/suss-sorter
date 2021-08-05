@@ -2,29 +2,18 @@
 """
 import networkx as nx
 import numpy as np
+import scipy
+
+import umap
+from scipy.sparse.csgraph import minimum_spanning_tree
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
 from sklearn.mixture import BayesianGaussianMixture, GaussianMixture
 from sklearn.neighbors import KNeighborsClassifier, NearestNeighbors, kneighbors_graph
 from sklearn.neighbors import LocalOutlierFactor
 
-import scipy
-from scipy.sparse.csgraph import minimum_spanning_tree
-import umap
-
 from suss.core import ClusterDataset, SubDataset
-from suss.sort import pca_time, cleanup_clusters, tsne_time, _vote_on_labels, cleanup_clusters
-
-
-def get_mknn(X, n_neighbors=10):
-    _dist = scipy.spatial.distance_matrix(X, X)
-    spanning = minimum_spanning_tree(_dist).toarray()
-    n_neighbors = int(np.min([n_neighbors, X.shape[0] // 2, X.shape[1] // 2]))
-    knn = kneighbors_graph(X, n_neighbors=n_neighbors, mode="distance").toarray()
-    # zero out edges that aren't both neighbors
-    knn = knn * (knn.T > 0)
-    knn[knn == 0] = spanning[knn == 0]
-    return nx.from_numpy_array(knn)
+from suss.sort import pca_time, cleanup_clusters
 
 
 def remove_outliers(mknn, n_neighbors=10, edges=1):    
@@ -44,22 +33,6 @@ def label_outliers(X, p=0.1, n_neighbors=10):
     pcs = PCA(n_components=2 if X.shape[1] >= 2 else 1).fit_transform(X)
     scores = np.max(np.abs(scipy.stats.zscore(pcs, axis=0)), axis=1)
     return scores < 2
-
-
-    """Outlier factor version"""
-    '''
-    clf = LocalOutlierFactor(n_neighbors=20, contamination=p)
-    pred = clf.fit_predict(X)
-    return pred
-
-
-    mknn = get_mknn(X)
-    mknn = remove_outliers(mknn, n_neighbors=n_neighbors, edges=1)
-    labels = np.ones(len(X))
-    if len(mknn):
-        labels[np.array(mknn)] = 0
-    return mknn, labels
-    '''
 
 
 def force_single_kwarg(**kwargs):
@@ -259,43 +232,3 @@ def cleanup_cluster_assignments(dataset, n_neighbors=3):
     new_labels = cleanup_clusters(projection, flat.labels, n_neighbors=n_neighbors)
     return flat.cluster(new_labels)
 
-    
-
-'''
-    def split_node(
-            self,
-            t_start,
-            t_stop,
-            node=None,
-            idx=None,
-            label=None,
-            keep_both=True):
-
-        if np.sum([node is not None, idx is not None, label is not None]) != 1:
-            raise ValueError("Only one of {node, idx, label} can be provided")
-        if label is not None:
-            match = np.where(self.labels == label)[0]
-        elif node is not None:
-            match = np.where(self.nodes == node)[0]
-        elif idx is not None:
-            match = [idx]
-
-        if len(match) > 1:
-            raise ValueError("More than one node matched "
-                    "label {}".format(label))
-        elif len(match) == 0:
-            raise ValueError("No node matched label {}".format(label))
-        else:
-            idx = match[0]
-
-        selector = np.eye(len(self))[idx].astype(np.bool)
-        in_range, out_range = self.nodes[idx].time_split(t_start, t_stop)
-        new_dataset = self.select(np.logical_not(selector), child=False)
-
-        if len(in_range) > 0:
-            new_dataset = new_dataset.add_nodes(in_range)
-        if keep_both and len(out_range) > 0:
-            new_dataset = new_dataset.add_nodes(out_range)
-
-        return new_dataset
-'''
