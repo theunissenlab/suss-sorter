@@ -10,14 +10,12 @@ from PyQt5 import QtGui as gui
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 from scipy.spatial import distance
-from sklearn.manifold import TSNE
 
 import scipy.stats
 from sklearn.decomposition import PCA
 import umap
 
 from suss.gui.config import SHOW
-from suss.sort import tsne_time
 from suss.gui.utils import require_dataset
 
 
@@ -39,7 +37,6 @@ class BackgroundTSNE(QObject):
 
     @pyqtSlot()
     def computeTSNE(self):
-        # tsne = tsne_time(self.dataset, t_scale=6 * 60.0 * 60.0, n_components=2)
         if SHOW == "pca":
             tsne = np.hstack([
                 scipy.stats.zscore(self.dataset.times[:, None]),
@@ -53,8 +50,6 @@ class BackgroundTSNE(QObject):
                 ])
             )
 
-        # tsne = TSNE(n_components=2).fit_transform(self.dataset)
-        print("Computed TSNE")
         self.finished.emit(tsne[:, :2])
 
 

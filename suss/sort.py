@@ -9,6 +9,7 @@ from isosplit5 import isosplit5
 from sklearn.neighbors import LocalOutlierFactor
 from sklearn.decomposition import PCA, FastICA
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
+from sklearn.manifold import TSNE
 from sklearn.mixture import GaussianMixture, BayesianGaussianMixture
 from sklearn.neighbors import KNeighborsClassifier
 
@@ -65,6 +66,23 @@ def lda_2d(wfs, labels, l1, l2):
         lda.transform(wfs2),
         np.zeros((0, 1)) if not len(wfs_) else lda.transform(wfs_)
     )
+
+
+def tsne_time(dataset, perplexity=30, t_scale=2 * 60 * 60, pcs=12):
+    if pcs >= min(dataset.waveforms.shape):
+        pcaed = PCA(n_components=min(dataset.waveforms.shape)).fit_transform(dataset.waveforms)
+    else:
+        pcaed = PCA(n_components=pcs).fit_transform(dataset.waveforms)
+    wf_arr = scipy.stats.zscore(pcaed)
+    t_arr = dataset.times / t_scale
+    t_arr = t_arr - np.mean(t_arr)
+
+    return TSNE(
+            n_components=2,
+            perplexity=perplexity,
+            n_iter=5000,
+            n_iter_without_progress=500
+    ).fit_transform(np.hstack([wf_arr, t_arr[:, None]]))
 
 
 def guided_reassignment(X, y=None, force_clusters=None):
