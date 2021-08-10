@@ -12,7 +12,7 @@ from matplotlib.figure import Figure
 from matplotlib import ticker
 
 from suss.analysis import align
-from suss.gui.utils import clear_axes, get_changed_labels 
+from suss.gui.utils import clear_axes, get_changed_labels
 from suss.gui.tags import ClusterTag, UserTag
 
 import suss.gui.config as config
@@ -105,7 +105,7 @@ class ClusterSelector(widgets.QScrollArea):
     def stimuli(self, key):
         if not self.has_stimuli:
             return []
-        return [period["start_time"] for period in self._stimuli[key]]
+        return [period for period in self._stimuli[key]]
 
     @property
     def has_stimuli(self):
