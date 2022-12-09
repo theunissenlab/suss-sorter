@@ -105,7 +105,7 @@ class App(widgets.QMainWindow):
         rect = w.frameGeometry()
         geom = widgets.QDesktopWidget().availableGeometry()
         center_on = geom.center()
-        center_on.setY(center_on.y() - geom.height() / 8)
+        center_on.setY(center_on.y() - geom.height() // 8)
         rect.moveCenter(center_on)
         self.move(rect.topLeft())
 

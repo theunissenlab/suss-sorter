@@ -4,6 +4,7 @@ import numpy as np
 from PyQt5 import QtWidgets as widgets
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
+from matplotlib.colors import to_rgba
 from sklearn.decomposition import PCA
 
 
@@ -61,10 +62,6 @@ class TimeseriesPlot(widgets.QFrame):
     def reset(self):
         # Delete the old layout
         # widgets.QWidget().setLayout(self.layout())
-        for label, scatters in self.scatters.items():
-            for scat in scatters:
-                scat.remove()
-            del scatters[:]
         for scat in self.main_scatters:
             scat.remove()
         del self.main_scatters[:]
@@ -104,7 +101,6 @@ class TimeseriesPlot(widgets.QFrame):
             ax.set_yticks([])
             ax.set_xticks([])
 
-        self.scatters = defaultdict(list)
         self.main_scatters = []
 
         self._frame = 0
@@ -119,6 +115,7 @@ class TimeseriesPlot(widgets.QFrame):
                 (self._frame % self._rotation_period) /
                 self._rotation_period
         )
+
         for dim in range(self.ndim):
             self.main_scatters[dim].set_offsets(np.array([
                 self.flattened.times,
@@ -127,16 +124,7 @@ class TimeseriesPlot(widgets.QFrame):
                     np.sin(_t + dim * np.pi / 2) * self.pcs.T[dim + 1]
                 )
             ]).T)
-        for label, node in zip(self.dataset.labels, self.dataset.nodes):
-            pcs = self.pcs[self.flattened.labels == label]
-            for dim in range(self.ndim):
-                self.scatters[label][dim].set_offsets(np.array([
-                    self.flattened.times[self.flattened.labels == label],
-                    (
-                        np.cos(_t + dim * np.pi / 2) * pcs.T[dim] +
-                        np.sin(_t + dim * np.pi / 2) * pcs.T[dim + 1]
-                    )
-                ]).T)
+
         self._frame += 1
         self._frame = self._frame % self._rotation_period
         self.canvas.draw_idle()
@@ -146,7 +134,6 @@ class TimeseriesPlot(widgets.QFrame):
             self.canvas.draw_idle()
             return
 
-        self.scatters = defaultdict(list)
         self.main_scatters = []
 
         self.flattened = self.dataset.flatten(self.flatten_level)
@@ -162,26 +149,10 @@ class TimeseriesPlot(widgets.QFrame):
                 self.flattened.times,
                 self.pcs.T[dim],
                 s=s,
-                alpha=0.8,
+                alpha=0.6,
                 color="Gray",
                 rasterized=True
             ))
-
-        for label, node in zip(self.dataset.labels, self.dataset.nodes):
-            pcs = self.pcs[self.flattened.labels == label]
-            times = self.flattened.times[self.flattened.labels == label]
-            for dim in range(self.ndim):
-                self.scatters[label].append(
-                    self.axes[dim].scatter(
-                        times,
-                        pcs.T[dim],
-                        s=3 * s,
-                        alpha=1,
-                        color=self.colors[label],
-                        rasterized=True
-                    )
-                )
-                self.scatters[label][-1].set_visible(label in self.selected)
 
         for dim, ax in enumerate(self.axes):
             ylim = np.max(np.abs(self.pcs[:, dim])) * 1.2
@@ -193,27 +164,26 @@ class TimeseriesPlot(widgets.QFrame):
         self.canvas.draw_idle()
 
     def on_cluster_select(self, selected, old_selected):
-        for label in self.scatters:
-            for scat in self.scatters[label]:
-                # TODO (kevin): i dont think this set color is needed
-                # scat.set_color(self.colors[label])
-                scat.set_visible(label in selected)
+        # could save copy of current selected here
+        colors = np.zeros((len(self.flattened),4))
+        colors[:] = to_rgba("Gray")
+        sizes = np.ones(len(self.flattened))*self.detail_level_scatter_size[self.flatten_level]
+        for label, _ in zip(self.dataset.labels, self.dataset.nodes):
+            if label in selected:
+                colors[self.flattened.labels == label] = self.colors[label]
+                sizes[self.flattened.labels == label] *= 3
+        
+        for dim in range(self.ndim):
+            self.main_scatters[dim].set_color(colors)
+            self.main_scatters[dim].set_sizes(sizes)
+        
 
     def on_cluster_highlight(self, new_highlight, old_highlight, temporary):
-        if (
-                old_highlight is not None and
-                old_highlight in self.scatters and
-                old_highlight in self.colors
-                ):
-            for scat in self.scatters[old_highlight]:
-                scat.set_color(self.colors[old_highlight])
-                scat.set_visible(old_highlight in self.selected)
-
-        if new_highlight is not None:
-            for scat in self.scatters[new_highlight]:
-                scat.set_facecolor("White")
-                scat.set_edgecolor(self.colors[new_highlight])
-                scat.set_visible(True)
+        alphas = np.ones(len(self.flattened))*.6
+        alphas[self.flattened.labels == new_highlight] = 1
+        for dim in range(self.ndim):
+            self.main_scatters[dim].set_alpha(alphas)
+        
 
     def init_ui(self):
         layout = widgets.QVBoxLayout()

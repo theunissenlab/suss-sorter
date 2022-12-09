@@ -141,8 +141,9 @@ class ClusterSelector(widgets.QScrollArea):
 
     def update_checks(self, selected):
         for label, button in self.buttons.items():
-            button.clicked.emit(label in selected)
-            button.setChecked(label in selected)
+            if button.isChecked() != (label in selected):
+                button.clicked.emit(label in selected)
+                button.setChecked(label in selected)
 
     def on_auditory_responses(self, category, state):
         if not self.show_auditory_responses and not state:
@@ -211,7 +212,7 @@ class ClusterSelector(widgets.QScrollArea):
                 "<b>{}</b> (n={}) {} clusters".format(
                     cluster_label,
                     cluster.count,
-                    "No cluster data" if not "nodes" in cluster._data else len(cluster.nodes)
+                    "No cluster data" if not "nodes" in cluster._data.dtype.names else len(cluster.nodes)
                 )
             )
             header_label.setFixedHeight(14)
