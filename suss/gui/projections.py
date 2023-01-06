@@ -77,7 +77,7 @@ class ProjectionsPlot(widgets.QFrame):
         self.ax_2d.patch.set_alpha(0.8)
 
         # if somehow the last pca is still running let it finish. Alternatively we could .terminate()
-        if self.worker_thread.is_active():
+        if self.worker_thread.is_alive():
             self.worker_thread.join()
 
         if not len(selected):

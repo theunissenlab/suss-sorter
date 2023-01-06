@@ -2,6 +2,8 @@ import numpy as np
 from PyQt5 import QtWidgets as widgets
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
+from scipy.stats import expon, poisson
+from scipy.optimize import curve_fit
 
 import suss.gui.config as config
 
@@ -105,7 +107,31 @@ class ISIPlot(widgets.QFrame):
             self.canvas.draw_idle()
             return
 
-        fr = len(clusters) / (np.max(clusters.times) - np.min(clusters.times))
+        tdur = np.max(clusters.times) - np.min(clusters.times)
+        fr = len(clusters) / tdur
+
+        # calculate q metric
+        REFTIME = 0.002 # Refractory time in s
+        HISTIME = 0.1 # Length of histogram to estimate exponential
+        HISTIMEMIN = 0.01 # Starting isi time point for exponential fit
+        def expfun(x, l):
+            return (l* np.exp(-l*x))
+        
+        p, xbin = np.histogram(isi, bins=100, range = (0,HISTIME), density = True)
+        xval = (xbin + np.roll(xbin, -1))/2.0
+        xval = xval[0:-1]
+        # fit section beyond 10 ms with exponential
+        if (np.any(~np.isnan(p[xval > HISTIMEMIN]))):
+            lfit, _ = curve_fit(expfun, xval[xval > HISTIMEMIN], p[xval > HISTIMEMIN])
+            nevent = np.sum(isi < REFTIME)
+            pPoisson = poisson.pmf(nevent, lfit[0]*tdur)
+            QIndex = nevent/(lfit[0]*tdur)
+            Qstr = "\nPoisson prob = {:.1f}%\nQ Index = {:.1e}".format(100.0 * pPoisson, QIndex)
+        else:
+            pPoisson = None
+            QIndex = None
+            Qstr = ""
+
 
         self.ax.hist(
             [
@@ -132,17 +158,19 @@ class ISIPlot(widgets.QFrame):
                     len(isi[across_clusters])
             )
             self.isi_label.set_text(
-                    "{:.1f}% ISI violations\np = {:.1f}%\n{:.1f}% across clusters".format(
+                    "{:.1f}% ISI violations\np = {:.1f}%\n{:.1f}% across clusters{}".format(
                     100.0 * isi_violations,
                     100 * (1 - np.exp(-fr * 0.001)),
                     100.0 * isi_violations_across,
+                    Qstr
                 )
             )
         else:
             self.isi_label.set_text(
-                "{:.1f}% ISI violations\np = {:.1f}%".format(
+                "{:.1f}% ISI violations\np = {:.1f}%{}".format(
                     100.0 * isi_violations,
                     100 * (1 - np.exp(-fr * 0.001)),
+                    Qstr
                 )
             )
 
