@@ -95,8 +95,8 @@ class WaveformsPlot(widgets.QFrame):
                 linewidth=2,
                 rasterized=True)
             self.ax.set_ylim(
-                min(self.ax.get_ylim()[0], mean[len(mean) // 2] - std[len(std) // 2]),
-                max(self.ax.get_ylim()[1], mean[len(mean) // 2] + std[len(std) // 2])
+                min(self.ax.get_ylim()[0], np.min(mean - std)),
+                max(self.ax.get_ylim()[1], np.max(mean + std))
             )
         self.canvas.draw_idle()
 

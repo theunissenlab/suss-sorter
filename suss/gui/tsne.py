@@ -287,6 +287,10 @@ class TSNEPlot(widgets.QFrame):
             # (toward cluster select panel) and when the last
             # highlighting operation was within 200ms
             return
+
+        if event.x is None or event.y is None:
+            # Supress highlighting if the cursor is not in the main graph
+            return
         self.last_update = time.time()
         closest_idx, dist = self._closest_node(event.xdata, event.ydata)
         if closest_idx == self.parent().highlighted:
