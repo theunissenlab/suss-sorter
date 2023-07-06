@@ -76,6 +76,15 @@ source bin/activate
 pip install -r requirements.txt
 ```
 
+If you have issues with Qt (in Linux), set QT_DEBUG_PLUGINS to 1.
+```
+export QT_DEBUG_PLUGINS=1
+```
+
+If you have missing libraries, try commands like
+```
+sudo apt install libxcb-xinerama0 libxcb-cursor0
+```
 #### Other dependencies
 
 * `ffmpeg` for creating HTML5 animated plots in notebooks
