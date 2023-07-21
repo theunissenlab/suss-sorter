@@ -262,7 +262,7 @@ class ClusterDataset(BaseDataset):
         super().__init__(
             times=[subnode.time for subnode in subnodes],
             data_column=data_column,
-            nodes=(subnodes, np.object),
+            nodes=(subnodes, object),
             labels=(labels, "int32")
         )
 
