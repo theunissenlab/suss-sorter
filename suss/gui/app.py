@@ -621,6 +621,9 @@ class SussViewer(widgets.QFrame):
 
         _new_dataset = delete_nodes(self.dataset, labels=list(to_delete))
 
+        # remove to_delete from selected
+        self.selected = self.selected - set(to_delete)
+
         plural = "s" if len(to_delete) > 1 else ""
         self._enstack("{} node".format(action) + plural, _new_dataset)
 

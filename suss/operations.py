@@ -13,7 +13,7 @@ from sklearn.neighbors import KNeighborsClassifier, NearestNeighbors, kneighbors
 from sklearn.neighbors import LocalOutlierFactor
 
 from suss.core import ClusterDataset, SubDataset
-from suss.sort import pca_time, cleanup_clusters
+from suss.sort import pca_time, cleanup_clusters, tsne_time
 
 
 def remove_outliers(mknn, n_neighbors=10, edges=1):    
@@ -55,7 +55,7 @@ def match_several(dataset, labels=None, nodes=None, idxs=None):
     elif idxs is not None:
         match = idxs
 
-    selector = np.zeros(len(dataset)).astype(np.bool)
+    selector = np.zeros(len(dataset)).astype(bool)
     selector[match] = True
     return selector
 
@@ -76,7 +76,7 @@ def match_one(dataset, label=None, node=None, idx=None):
     else:
         idx = match[0]
 
-    selector = np.eye(len(dataset))[idx].astype(np.bool)
+    selector = np.eye(len(dataset))[idx].astype(bool)
     return selector
 
 
