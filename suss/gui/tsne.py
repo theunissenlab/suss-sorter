@@ -207,8 +207,6 @@ class TSNEPlot(widgets.QFrame):
             rasterized=True
         )
 
-        print("current idx shape: {}".format(self.current_idx.shape))
-
         # for label, node in zip(self.dataset.labels, self.dataset.nodes):
         for label in self.dataset.labels:
             node = self.flattened.select(self.current_labels == label)
