@@ -20,4 +20,4 @@ def align(cluster, stimulus_times, t_start, t_stop):
         aligned_spikes.append(window.times - stimulus_time)
         aligned_waveforms.append(window.waveforms)
 
-    return np.array(aligned_spikes), np.array(aligned_waveforms)
+    return aligned_spikes, aligned_waveforms

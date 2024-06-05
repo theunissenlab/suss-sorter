@@ -230,7 +230,7 @@ class SussViewer(widgets.QFrame):
     """
 
     minimum_size = (1000, 500)
-    animation_period = 100.0
+    animation_period = 100
 
     # Emits the new dataset object and the old dataset object
     UPDATED_CLUSTERS = pyqtSignal(object, object)
@@ -673,12 +673,12 @@ class SussViewer(widgets.QFrame):
         # self.cluster_selector = ClusterSelector(parent=self)
 
         layout = widgets.QGridLayout()
-        layout.setRowStretch(1, 1.5)
-        layout.setRowStretch(2, 1.5)
-        layout.setRowStretch(3, 2)
-        layout.setColumnStretch(1, 1.5)
-        layout.setColumnStretch(2, 1.5)
-        layout.setColumnStretch(3, 1)
+        layout.setRowStretch(1, 3)
+        layout.setRowStretch(2, 3)
+        layout.setRowStretch(3, 4)
+        layout.setColumnStretch(1, 3)
+        layout.setColumnStretch(2, 3)
+        layout.setColumnStretch(3, 2)
 
         # Initialize TSNEPlot first so that the T-SNE embedding
         # can be computed in the background while the other components

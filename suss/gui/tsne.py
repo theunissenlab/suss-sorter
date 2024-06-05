@@ -129,8 +129,6 @@ class TSNEPlot(widgets.QFrame):
         self.setup_data()
 
     def tsne(self):
-        print("_tsne shape: {}".format(self._tsne.shape))
-        print("_tsne selected shape: {}".format(self._tsne[np.isin(self.base_idx, self.current_idx)].shape))
         return self._tsne[np.isin(self.base_idx, self.current_idx)]
 
     def on_close(self):
@@ -288,7 +286,7 @@ class TSNEPlot(widgets.QFrame):
             # highlighting operation was within 200ms
             return
 
-        if event.x is None or event.y is None:
+        if event.inaxes != self.ax:
             # Supress highlighting if the cursor is not in the main graph
             return
         self.last_update = time.time()

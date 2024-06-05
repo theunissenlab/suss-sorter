@@ -130,7 +130,7 @@ def split_window(wfs, labels, umapped):
                     selector_ = np.zeros_like(labels)
                     for i in selector[sub_labels == new_label]:
                         selector_[i] = 1
-                    np.place(labels, selector_.astype(np.bool), np.max(labels) + 1)
+                    np.place(labels, selector_.astype(bool), np.max(labels) + 1)
 
     final_labels = np.copy(labels)
 
